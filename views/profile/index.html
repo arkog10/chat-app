@@ -1,0 +1,111 @@
+<main v-if="!$graffitiSession.value" class="signed-out">
+  <div class="signed-out__card">
+    <h2>Profile</h2>
+    <p class="muted">Sign in to set up your profile.</p>
+    <button
+      type="button"
+      class="btn-primary btn-lg"
+      @click="$graffiti.login()"
+    >
+      Log in
+    </button>
+  </div>
+</main>
+<main v-else class="route-page panel profile-page">
+  <header class="route-page__head profile-page__head">
+    <h1 class="route-page__title">Profile</h1>
+    <button
+      v-if="!profileEditing"
+      type="button"
+      class="btn-ghost profile-page__edit"
+      @click="startProfileEdit"
+    >Edit</button>
+    <div v-else class="profile-page__head-actions">
+      <button
+        type="button"
+        class="btn-ghost"
+        @click="cancelProfileEdit"
+      >Cancel</button>
+      <button
+        type="button"
+        class="btn-primary"
+        @click="saveUserProfile"
+      >Save</button>
+    </div>
+  </header>
+
+  <div class="profile-page__avatar-shell">
+    <div
+      v-if="selfProfile.avatarPhotoDataUrl"
+      class="profile-page__avatar-ring profile-page__avatar-ring--photo"
+      aria-label="Profile picture"
+    >
+      <img :src="selfProfile.avatarPhotoDataUrl" alt="" class="profile-page__avatar-img" />
+    </div>
+    <div
+      v-else
+      class="profile-page__avatar-ring"
+      aria-label="Profile picture"
+    >
+      <span class="profile-page__avatar-emoji">{{
+        resolveAvatarEmoji(selfProfile.avatarKey || 'fern')
+      }}</span>
+    </div>
+  </div>
+
+  <div v-if="!profileEditing" class="profile-page__ro">
+    <p><strong>Display name</strong><br />{{ selfProfile.displayName || graffitiDisplayName($graffitiSession.value.actor) }}</p>
+    <p><strong>Class year</strong><br />{{ selfProfile.classYear || "—" }}</p>
+    <p><strong>Major</strong><br />{{ selfProfile.major || "—" }}</p>
+    <p><strong>Bio</strong><br />{{ selfProfile.bio || "—" }}</p>
+  </div>
+  <form v-else class="profile-page__form" @submit.prevent="saveUserProfile">
+    <fieldset class="profile-page__avatars">
+      <legend class="profile-page__avatars-legend">Profile picture</legend>
+      <label class="profile-page__upload">
+        <span class="profile-page__upload-label">Upload image</span>
+        <input type="file" accept="image/*" class="profile-page__file" @change="onProfilePhotoInput" />
+      </label>
+      <p v-if="profileDraft.avatarPhotoDataUrl" class="profile-page__upload-note muted">Photo set — Save to keep. Presets apply when photo is removed.</p>
+      <button
+        v-if="profileDraft.avatarPhotoDataUrl"
+        type="button"
+        class="btn-ghost btn-ghost--small profile-page__clear-photo"
+        @click="clearProfileDraftPhoto"
+      >
+        Remove photo
+      </button>
+      <p class="profile-page__avatars-legend profile-page__avatars-legend--sub">Or choose an emoji</p>
+      <div class="profile-page__avatar-grid">
+        <button
+          v-for="p in AVATAR_PRESETS"
+          :key="p.id"
+          type="button"
+          class="profile-page__avatar-pick"
+          :class="{ 'profile-page__avatar-pick--selected': profileDraft.avatarKey === p.id }"
+          :aria-pressed="profileDraft.avatarKey === p.id"
+          :title="p.emoji"
+          @click="profileDraft.avatarKey = p.id"
+        >
+          <span class="profile-page__avatar-pick-emoji">{{ p.emoji }}</span>
+        </button>
+      </div>
+    </fieldset>
+    <label class="profile-page__field">
+      Display name
+      <input v-model="profileDraft.displayName" type="text" maxlength="80" />
+    </label>
+    <label class="profile-page__field">
+      Class year
+      <input v-model="profileDraft.classYear" type="text" placeholder="e.g. 2026" maxlength="12" />
+    </label>
+    <label class="profile-page__field">
+      Major
+      <input v-model="profileDraft.major" type="text" maxlength="80" />
+    </label>
+    <label class="profile-page__field">
+      Bio
+      <textarea v-model="profileDraft.bio" rows="4" maxlength="2000"></textarea>
+    </label>
+  </form>
+</main>

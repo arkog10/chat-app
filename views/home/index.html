@@ -1,0 +1,855 @@
+            <main v-if="!$graffitiSession.value" class="signed-out">
+                <div class="signed-out__card">
+                    <h2>Welcome to ClubChat!</h2>
+                    <button
+                        type="button"
+                        class="btn-primary btn-lg"
+                        @click="$graffiti.login()"
+                    >
+                        Log in
+                    </button>
+                </div>
+            </main>
+
+            <template v-else>
+                <div
+                    v-if="statusMessage"
+                    class="status-banner"
+                    role="status"
+                    aria-live="polite"
+                >
+                    {{ statusMessage }}
+                </div>
+
+                <div
+                    class="layout"
+                    :class="{ 'layout--narrow-showing-main': isNarrow && currentChatId !== null }"
+                >
+                    <!-- SIDEBAR RAIL -->
+                    <aside class="sidebar panel" aria-label="Home">
+                        <div class="sidebar__head sidebar__head--tabs">
+                            <div
+                                class="sidebar__pane-switch"
+                                role="tablist"
+                                aria-label="Sidebar"
+                            >
+                                <button
+                                    type="button"
+                                    class="sidebar__pane-tab"
+                                    role="tab"
+                                    :aria-selected="sidebarPaneTab === 'chats'"
+                                    @click="sidebarPaneTab = 'chats'"
+                                >
+                                    Chats
+                                </button>
+                                <button
+                                    type="button"
+                                    class="sidebar__pane-tab"
+                                    role="tab"
+                                    :aria-selected="sidebarPaneTab === 'tasks'"
+                                    @click="sidebarPaneTab = 'tasks'"
+                                >
+                                    Tasks
+                                </button>
+                            </div>
+                            <router-link
+                                class="sidebar__new-chat"
+                                to="/newchat"
+                            >
+                                <span class="sidebar__new-chat-icon" aria-hidden="true">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+                                        <path d="M12 5v14M5 12h14" />
+                                    </svg>
+                                </span>
+                                New Chat
+                            </router-link>
+                        </div>
+
+                        <section
+                            v-show="sidebarPaneTab === 'chats'"
+                            class="sidebar__section"
+                            aria-label="Chat list"
+                        >
+                            <div
+                                v-if="isAnyListLoading && myChats.length === 0"
+                                class="empty-state"
+                            >
+                                <p>Syncing…</p>
+                            </div>
+                            <ul
+                                v-else-if="myChats.length > 0"
+                                class="chat-list"
+                            >
+                                <li
+                                    v-for="chat in myChats"
+                                    :key="chat.value.channel"
+                                >
+                                    <router-link
+                                        :to="{
+                                            name: 'chat',
+                                            params: { chatId: chat.value.channel },
+                                        }"
+                                        class="chat-row"
+                                        active-class="chat-row--active"
+                                    >
+                                        <span
+                                            :class="[groupDotClass(chatGroupType(chat.value.channel)), 'chat-row__dot']"
+                                            aria-hidden="true"
+                                        ></span>
+                                        <span class="chat-row__title">
+                                            {{ chat.value.title }}
+                                        </span>
+                                        <span class="chat-row__meta">
+                                            <span
+                                                v-if="unreadCount(chat.value.channel) > 0"
+                                                class="unread-bubble"
+                                                aria-label="Unread messages"
+                                            >
+                                                {{ unreadCount(chat.value.channel) }}
+                                            </span>
+                                            <span class="chat-row__chevron" aria-hidden="true">
+                                                ›
+                                            </span>
+                                        </span>
+                                    </router-link>
+                                </li>
+                            </ul>
+                            <p v-else class="empty-state">
+                                No chats yet. Open <strong>Explore</strong> in the menu
+                                to find groups, or <strong>New Chat</strong> to start one.
+                            </p>
+                        </section>
+
+                        <section
+                            v-show="sidebarPaneTab === 'tasks'"
+                            class="sidebar-tasks-rollup sidebar-tasks-rollup--tabbed"
+                            aria-label="Tasks across your chats"
+                        >
+                            <div
+                                class="task-filter task-filter--sidebar"
+                                role="tablist"
+                                aria-label="Filter tasks"
+                            >
+                                <button
+                                    type="button"
+                                    class="task-filter__btn"
+                                    role="tab"
+                                    :class="{ 'task-filter__btn--active': sidebarTaskFilter === 'all' }"
+                                    :aria-selected="sidebarTaskFilter === 'all'"
+                                    @click="sidebarTaskFilter = 'all'"
+                                >
+                                    All
+                                </button>
+                                <button
+                                    type="button"
+                                    class="task-filter__btn"
+                                    role="tab"
+                                    :class="{ 'task-filter__btn--active': sidebarTaskFilter === 'pending' }"
+                                    :aria-selected="sidebarTaskFilter === 'pending'"
+                                    @click="sidebarTaskFilter = 'pending'"
+                                >
+                                    Pending
+                                </button>
+                                <button
+                                    type="button"
+                                    class="task-filter__btn"
+                                    role="tab"
+                                    :class="{ 'task-filter__btn--active': sidebarTaskFilter === 'complete' }"
+                                    :aria-selected="sidebarTaskFilter === 'complete'"
+                                    @click="sidebarTaskFilter = 'complete'"
+                                >
+                                    Done
+                                </button>
+                            </div>
+                            <ul v-if="sidebarJoinedTasksFiltered.length > 0" class="sidebar-tasks-rollup__list">
+                                <li
+                                    v-for="row in sidebarJoinedTasksFiltered"
+                                    :key="row.chatId + row.taskId"
+                                    class="sidebar-task-row"
+                                >
+                                    <button
+                                        type="button"
+                                        class="task-done-toggle"
+                                        :class="{ 'task-done-toggle--on': row.completed }"
+                                        role="checkbox"
+                                        :aria-checked="row.completed"
+                                        :aria-label="row.completed ? 'Mark task not done' : 'Mark task done'"
+                                        :disabled="Boolean(taskCompleteBusy[taskToggleBusyKey(row.chatId, row.taskId)])"
+                                        @click.stop="toggleTaskComplete(row.chatId, row)"
+                                    >
+                                        <span class="task-done-toggle__ring" aria-hidden="true">
+                                            <svg class="task-done-toggle__tick" viewBox="0 0 12 10" fill="none" aria-hidden="true">
+                                                <path d="M1 5l3.5 3.5L11 1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                                            </svg>
+                                        </span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="sidebar-task-link"
+                                        :class="{ 'sidebar-task-link--done': row.completed }"
+                                        @click="goToChatTasks(row.chatId, row.taskId)"
+                                    >
+                                        <span class="sidebar-task-link__title">{{ row.title }}</span>
+                                        <span class="sidebar-task-link__meta">
+                                            <span
+                                                :class="groupTagClass(chatGroupType(row.chatId))"
+                                                class="sidebar-task-link__group-pill"
+                                            >{{ chatTitle(row.chatId) }}</span>
+                                            <span class="muted"> · {{ formatTaskDeadline(row.deadline) }}</span>
+                                        </span>
+                                    </button>
+                                </li>
+                            </ul>
+                            <p v-else-if="allJoinedTasksList.length > 0" class="sidebar-tasks-rollup__empty muted">
+                                No {{ sidebarTaskFilter === 'pending' ? 'pending' : 'completed' }} tasks.
+                            </p>
+                            <p v-else class="sidebar-tasks-rollup__empty muted">No tasks yet.</p>
+                        </section>
+                    </aside>
+
+                    <!-- MAIN PANE -->
+                    <section
+                        class="main"
+                        :class="{ 'main--chat-open': currentChatId !== null }"
+                        :aria-label="
+                            currentChatId ? chatTitle(currentChatId) : 'No chat selected'
+                        "
+                    >
+                        <div
+                            v-if="currentChatId === null"
+                            class="main-placeholder panel"
+                        >
+                            <h2>Pick a chat on the left</h2>
+                            <p class="muted">
+                                Or use <strong>New Chat</strong> or
+                                <strong>Explore</strong> in the top bar. Your groups
+                                are listed in Home.
+                            </p>
+                        </div>
+
+                        <template v-else>
+                            <div class="chat-body panel chat-body--layered">
+                                <header
+                                    class="chat-view__header chat-view__header--rich"
+                                >
+                                    <div class="chat-view__header-row">
+                                        <button
+                                            v-if="isNarrow"
+                                            type="button"
+                                            class="chat-view__back btn-ghost btn-ghost--small"
+                                            @click="closeChat"
+                                        >
+                                            ← Chats
+                                        </button>
+                                        <h1 class="chat-view__title">
+                                            {{ chatTitle(currentChatId) }}
+                                        </h1>
+                                        <div class="chat-view__header-actions">
+                                            <div class="chat-view__pane-switch" role="tablist" aria-label="Chat view">
+                                                <button
+                                                    type="button"
+                                                    class="chat-view__pane-tab"
+                                                    role="tab"
+                                                    :aria-selected="mainPaneTab === 'messages'"
+                                                    @click="setMainPaneTab('messages')"
+                                                >
+                                                    Messages
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    class="chat-view__pane-tab"
+                                                    role="tab"
+                                                    :aria-selected="mainPaneTab === 'tasks'"
+                                                    @click="setMainPaneTab('tasks')"
+                                                >
+                                                    Tasks
+                                                </button>
+                                            </div>
+                                            <div class="chat-view__header-tools">
+                                                <div class="chat-view__more-wrap">
+                                                    <button
+                                                        type="button"
+                                                        class="btn-ghost chat-view__kebab"
+                                                        aria-label="Group options"
+                                                        :aria-expanded="chatActionMenuOpen"
+                                                        @click.stop="chatActionMenuOpen = !chatActionMenuOpen"
+                                                    >⋮</button>
+                                                    <ul
+                                                        v-if="chatActionMenuOpen"
+                                                        class="chat-view__dropdown"
+                                                        role="menu"
+                                                        @click.stop
+                                                    >
+                                                        <li role="none">
+                                                            <button
+                                                                type="button"
+                                                                role="menuitem"
+                                                                :aria-expanded="chatInfoOpen"
+                                                                @click="toggleChatInfo(); chatActionMenuOpen = false"
+                                                            >
+                                                                {{ chatInfoOpen ? "Hide chat info" : "Chat info" }}
+                                                            </button>
+                                                        </li>
+                                                        <li role="none">
+                                                            <button
+                                                                type="button"
+                                                                role="menuitem"
+                                                                :disabled="leaveOrDeleteBusy"
+                                                                @click="onLeaveGroup(currentChatId); chatActionMenuOpen = false"
+                                                            >
+                                                                Leave group…
+                                                            </button>
+                                                        </li>
+                                                        <li role="none">
+                                                            <button
+                                                                type="button"
+                                                                role="menuitem"
+                                                                class="chat-view__dropdown-item--danger"
+                                                                :disabled="leaveOrDeleteBusy"
+                                                                @click="onDeleteGroup(currentChatId); chatActionMenuOpen = false"
+                                                            >
+                                                                Delete group…
+                                                            </button>
+                                                        </li>
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </header>
+
+                                <div
+                                    v-if="chatInfoOpen"
+                                    class="chat-overlay chat-overlay--info"
+                                    role="dialog"
+                                    aria-modal="true"
+                                    aria-label="Chat details"
+                                    @click.self="chatInfoOpen = false"
+                                >
+                                    <div class="chat-overlay__panel chat-overlay__panel--split panel" @click.stop>
+                                        <div class="chat-overlay__toolbar">
+                                            <h2 class="chat-overlay__title">Chat details</h2>
+                                            <button
+                                                type="button"
+                                                class="btn-ghost btn-ghost--small"
+                                                @click="chatInfoOpen = false"
+                                            >
+                                                Close
+                                            </button>
+                                        </div>
+                                        <div class="chat-overlay__cols">
+                                            <div class="chat-overlay__col chat-overlay__col--about">
+                                                <template v-if="chatMetaEditing && isChatOwner(currentChatId)">
+                                                    <label class="chat-overlay__field">
+                                                        Group name
+                                                        <input v-model="chatMetaDraft.title" type="text" :maxlength="MAX_GROUP_NAME_LEN" />
+                                                    </label>
+                                                    <label class="chat-overlay__field">
+                                                        Description
+                                                        <textarea v-model="chatMetaDraft.description" rows="5" maxlength="2000"></textarea>
+                                                    </label>
+                                                    <label class="chat-overlay__field">
+                                                        Group type
+                                                        <select v-model="chatMetaDraft.groupType">
+                                                            <option v-for="opt in GROUP_TAG_OPTIONS" :key="opt.id" :value="opt.id">{{ opt.label }}</option>
+                                                        </select>
+                                                    </label>
+                                                    <div class="chat-overlay__edit-actions">
+                                                        <button type="button" class="btn-ghost" @click="cancelChatMetaEdit" :disabled="chatMetaBusy">Cancel</button>
+                                                        <button type="button" class="btn-primary" @click="saveChatMeta(currentChatId)" :disabled="chatMetaBusy">{{ chatMetaBusy ? "Saving…" : "Save" }}</button>
+                                                    </div>
+                                                </template>
+                                                <template v-else>
+                                                    <h3 class="chat-overlay__section-title">Group type</h3>
+                                                    <p class="chat-overlay__tag-wrap">
+                                                        <span :class="groupTagClass(chatGroupType(currentChatId))">{{ groupTypeLabel(chatGroupType(currentChatId)) }}</span>
+                                                    </p>
+                                                    <h3 class="chat-overlay__section-title">Description</h3>
+                                                    <p class="chat-overlay__about-body">{{ chatDescriptionText(currentChatId) || "No description yet." }}</p>
+                                                    <button
+                                                        v-if="isChatOwner(currentChatId)"
+                                                        type="button"
+                                                        class="btn-ghost btn-ghost--small chat-overlay__edit-link"
+                                                        @click="startChatMetaEdit(currentChatId)"
+                                                    >
+                                                        Edit details
+                                                    </button>
+                                                </template>
+                                            </div>
+                                            <div class="chat-overlay__col chat-overlay__col--members">
+                                                <h3 class="chat-overlay__section-title">Members</h3>
+                                                <ul class="chat-member-list chat-member-list--overlay">
+                                                    <li v-for="act in currentChatMemberActors" :key="act">{{ graffitiDisplayName(act) }}</li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="chat-body__conversation">
+                                <div
+                                    v-show="mainPaneTab === 'messages'"
+                                    class="chat-main-pane chat-main-pane--messages"
+                                >
+                                <div
+                                    ref="messagesPanelRef"
+                                    class="messages-panel"
+                                >
+                                <div
+                                    v-if="areMessagesLoading && sortedMessages.length === 0"
+                                    class="empty-state"
+                                >
+                                    <p>Loading messages…</p>
+                                </div>
+
+                                <ul
+                                    v-else-if="sortedMessages.length > 0"
+                                    class="message-list"
+                                >
+                                    <template
+                                        v-for="item in messageTimeline"
+                                        :key="item.key"
+                                    >
+                                        <li
+                                            v-if="item.kind === 'day'"
+                                            class="message-day"
+                                            role="presentation"
+                                        >
+                                            <time
+                                                class="message-day__chip"
+                                                :datetime="item.dateKey"
+                                            >
+                                                {{
+                                                    formatDayDivider(
+                                                        item.published,
+                                                    )
+                                                }}
+                                            </time>
+                                        </li>
+                                        <li
+                                            v-else
+                                            :class="{
+                                                message: true,
+                                                'message--own':
+                                                    item.message.actor ===
+                                                    $graffitiSession.value.actor,
+                                                'message--peer':
+                                                    item.message.actor !==
+                                                    $graffitiSession.value.actor,
+                                            }"
+                                            :style="{
+                                                '--peer-accent': `hsl(${peerAccentHue(
+                                                    item.message.actor,
+                                                )} 46% 38%)`,
+                                                '--peer-accent-soft': `hsl(${peerAccentHue(
+                                                    item.message.actor,
+                                                )} 42% 94%)`,
+                                            }"
+                                        >
+                                            <div
+                                                class="message__row"
+                                                :class="{
+                                                    'message__row--peer':
+                                                        item.message.actor !==
+                                                        $graffitiSession.value
+                                                            .actor,
+                                                    'message__row--own':
+                                                        item.message.actor ===
+                                                        $graffitiSession.value
+                                                            .actor,
+                                                }"
+                                            >
+                                                <template
+                                                    v-if="
+                                                        item.message.actor !==
+                                                        $graffitiSession.value
+                                                            .actor
+                                                    "
+                                                >
+                                                    <div
+                                                        class="message__pfp message__pfp--peer"
+                                                        :title="
+                                                            graffitiDisplayName(
+                                                                item.message
+                                                                    .actor,
+                                                            )
+                                                        "
+                                                    >
+                                                        <img
+                                                            v-if="messageAvatarPhoto(item.message.actor)"
+                                                            class="message__pfp-img"
+                                                            :src="messageAvatarPhoto(item.message.actor)"
+                                                            alt=""
+                                                        />
+                                                        <span
+                                                            v-else-if="messageAvatarEmoji(item.message.actor)"
+                                                            class="message__pfp-emoji"
+                                                            aria-hidden="true"
+                                                        >{{ messageAvatarEmoji(item.message.actor) }}</span>
+                                                        <span v-else class="message__pfp-initials">{{ messageAvatarInitials(item.message.actor) }}</span>
+                                                    </div>
+                                                    <div
+                                                        class="message__column message__column--peer"
+                                                    >
+                                                        <span
+                                                            class="message__sender-label"
+                                                        >
+                                                            {{
+                                                                graffitiDisplayName(
+                                                                    item.message
+                                                                        .actor,
+                                                                )
+                                                            }}
+                                                        </span>
+                                                        <div class="message__bubble">
+                                                            <div class="message__body">
+                                                                <p
+                                                                    class="message__content"
+                                                                >
+                                                                    {{
+                                                                        item
+                                                                            .message
+                                                                            .value
+                                                                            .content
+                                                                    }}
+                                                                </p>
+                                                                <time
+                                                                    class="message__time"
+                                                                    :datetime="
+                                                                        new Date(
+                                                                            item.message
+                                                                                .value
+                                                                                .published,
+                                                                        ).toISOString()
+                                                                    "
+                                                                >
+                                                                    {{
+                                                                        formatMessageTime(
+                                                                            item.message
+                                                                                .value
+                                                                                .published,
+                                                                        )
+                                                                    }}
+                                                                </time>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </template>
+                                                <template v-else>
+                                                    <div
+                                                        class="message__column message__column--own"
+                                                    >
+                                                        <span
+                                                            class="message__sender-label message__sender-label--own"
+                                                        >
+                                                            {{
+                                                                graffitiDisplayName(
+                                                                    item.message
+                                                                        .actor,
+                                                                )
+                                                            }}
+                                                        </span>
+                                                        <div class="message__bubble">
+                                                            <div class="message__body">
+                                                                <p
+                                                                    class="message__content"
+                                                                >
+                                                                    {{
+                                                                        item
+                                                                            .message
+                                                                            .value
+                                                                            .content
+                                                                    }}
+                                                                </p>
+                                                                <time
+                                                                    class="message__time"
+                                                                    :datetime="
+                                                                        new Date(
+                                                                            item.message
+                                                                                .value
+                                                                                .published,
+                                                                        ).toISOString()
+                                                                    "
+                                                                >
+                                                                    {{
+                                                                        formatMessageTime(
+                                                                            item.message
+                                                                                .value
+                                                                                .published,
+                                                                        )
+                                                                    }}
+                                                                </time>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div
+                                                        class="message__pfp message__pfp--self"
+                                                        title="You"
+                                                    >
+                                                        <img
+                                                            v-if="messageAvatarPhoto(item.message.actor)"
+                                                            class="message__pfp-img"
+                                                            :src="messageAvatarPhoto(item.message.actor)"
+                                                            alt=""
+                                                        />
+                                                        <span
+                                                            v-else-if="messageAvatarEmoji(item.message.actor)"
+                                                            class="message__pfp-emoji"
+                                                            aria-hidden="true"
+                                                        >{{ messageAvatarEmoji(item.message.actor) }}</span>
+                                                        <span v-else class="message__pfp-initials">{{ messageAvatarInitials(item.message.actor) }}</span>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </li>
+                                    </template>
+                                </ul>
+
+                                <p v-else class="empty-state">
+                                    No messages yet. Say hello below.
+                                </p>
+                            </div>
+
+                                <form
+                                    class="composer"
+                                    @submit.prevent="onSendMessage"
+                                >
+                                    <input
+                                        v-model="draftMessage"
+                                        ref="composerInputRef"
+                                        type="text"
+                                        placeholder="Write a message…"
+                                        :disabled="sendBusy"
+                                        aria-label="Message"
+                                    />
+                                    <button
+                                        type="submit"
+                                        class="btn-primary"
+                                        :disabled="sendBusy || !draftMessage.trim()"
+                                    >
+                                        {{ sendBusy ? "Sending…" : "Send" }}
+                                    </button>
+                                </form>
+                                </div>
+
+                                <div
+                                    v-show="mainPaneTab === 'tasks'"
+                                    class="chat-main-pane chat-main-pane--tasks"
+                                >
+                                    <div class="chat-tasks-pane__header">
+                                        <div class="chat-tasks-pane__toolbar">
+                                            <h3 class="chat-tasks-pane__heading rail-section-title">Tasks</h3>
+                                            <button type="button" class="btn-primary btn-small" @click="openTaskCreateForm">New task</button>
+                                        </div>
+                                        <div
+                                            class="task-filter task-filter--chat"
+                                            role="tablist"
+                                            aria-label="Filter tasks in this chat"
+                                        >
+                                            <button
+                                                type="button"
+                                                class="task-filter__btn"
+                                                role="tab"
+                                                :class="{ 'task-filter__btn--active': chatTaskFilter === 'all' }"
+                                                :aria-selected="chatTaskFilter === 'all'"
+                                                @click="chatTaskFilter = 'all'"
+                                            >
+                                                All
+                                            </button>
+                                            <button
+                                                type="button"
+                                                class="task-filter__btn"
+                                                role="tab"
+                                                :class="{ 'task-filter__btn--active': chatTaskFilter === 'pending' }"
+                                                :aria-selected="chatTaskFilter === 'pending'"
+                                                @click="chatTaskFilter = 'pending'"
+                                            >
+                                                Pending
+                                            </button>
+                                            <button
+                                                type="button"
+                                                class="task-filter__btn"
+                                                role="tab"
+                                                :class="{ 'task-filter__btn--active': chatTaskFilter === 'complete' }"
+                                                :aria-selected="chatTaskFilter === 'complete'"
+                                                @click="chatTaskFilter = 'complete'"
+                                            >
+                                                Done
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div v-if="chatTaskCreateOpen && !taskEditingId" class="club-chat-task-editor">
+                                        <label class="chat-overlay__field">
+                                            Task name
+                                            <input v-model="taskDraft.title" type="text" maxlength="120" placeholder="Short title" />
+                                        </label>
+                                        <label class="chat-overlay__field">
+                                            Due
+                                            <input v-model="taskDraft.deadlineLocal" type="datetime-local" />
+                                        </label>
+                                        <label class="club-chat-task-editor__completed">
+                                            <input v-model="taskDraft.completed" type="checkbox" class="club-chat-task-editor__completed-input" />
+                                            <span class="club-chat-task-editor__completed-box" aria-hidden="true">
+                                                <svg class="club-chat-task-editor__completed-tick" viewBox="0 0 12 10" fill="none" aria-hidden="true">
+                                                    <path d="M1 5l3.5 3.5L11 1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                                                </svg>
+                                            </span>
+                                            <span class="club-chat-task-editor__completed-label">Mark as completed</span>
+                                        </label>
+                                        <div class="club-chat-task-editor__actions">
+                                            <button type="button" class="btn-ghost" @click="cancelTaskForm">Cancel</button>
+                                            <button type="button" class="btn-primary" :disabled="taskBusy" @click="onSaveTask">{{ taskBusy ? "Saving…" : (taskEditingId ? "Save changes" : "Create task") }}</button>
+                                        </div>
+                                    </div>
+                                    <ul class="club-chat-task-list" aria-label="Task list">
+                                        <li
+                                            v-for="task in chatTaskRowsForDisplay"
+                                            :id="'task-row-' + task.taskId"
+                                            :key="task.displayKey"
+                                            class="club-chat-task"
+                                            :class="{
+                                                'club-chat-task--editing': taskEditingId === task.taskId,
+                                                'club-chat-task--done': task.completed && taskEditingId !== task.taskId
+                                            }"
+                                        >
+                                            <div v-if="taskEditingId === task.taskId" class="club-chat-task-editor">
+                                                <label class="chat-overlay__field">
+                                                    Task name
+                                                    <input v-model="taskDraft.title" type="text" maxlength="120" placeholder="Short title" />
+                                                </label>
+                                                <label class="chat-overlay__field">
+                                                    Due
+                                                    <input v-model="taskDraft.deadlineLocal" type="datetime-local" />
+                                                </label>
+                                                <label class="club-chat-task-editor__completed">
+                                                    <input v-model="taskDraft.completed" type="checkbox" class="club-chat-task-editor__completed-input" />
+                                                    <span class="club-chat-task-editor__completed-box" aria-hidden="true">
+                                                        <svg class="club-chat-task-editor__completed-tick" viewBox="0 0 12 10" fill="none" aria-hidden="true">
+                                                            <path d="M1 5l3.5 3.5L11 1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                                                        </svg>
+                                                    </span>
+                                                    <span class="club-chat-task-editor__completed-label">Mark as completed</span>
+                                                </label>
+                                                <div class="club-chat-task-editor__actions">
+                                                    <button type="button" class="btn-ghost" @click="cancelTaskForm">Cancel</button>
+                                                    <button type="button" class="btn-primary" :disabled="taskBusy" @click="onSaveTask">{{ taskBusy ? "Saving…" : "Save changes" }}</button>
+                                                </div>
+                                            </div>
+                                            <div
+                                                v-else
+                                                class="club-chat-task__display-row"
+                                            >
+                                                <span
+                                                    tabindex="0"
+                                                    class="task-row-card__complete task-done-toggle"
+                                                    :class="{
+                                                        'task-done-toggle--on': task.completed,
+                                                        'task-done-toggle--disabled': Boolean(taskCompleteBusy[taskToggleBusyKey(currentChatId, task.taskId)])
+                                                    }"
+                                                    role="checkbox"
+                                                    :aria-checked="task.completed"
+                                                    :aria-disabled="Boolean(taskCompleteBusy[taskToggleBusyKey(currentChatId, task.taskId)])"
+                                                    :aria-label="task.completed ? 'Mark task not done' : 'Mark task done'"
+                                                    @click.stop="toggleTaskComplete(currentChatId, task)"
+                                                    @keydown.enter.prevent.stop="toggleTaskComplete(currentChatId, task)"
+                                                    @keydown.space.prevent.stop="toggleTaskComplete(currentChatId, task)"
+                                                >
+                                                    <span class="task-done-toggle__ring" aria-hidden="true">
+                                                        <svg class="task-done-toggle__tick" viewBox="0 0 12 10" fill="none" aria-hidden="true">
+                                                            <path d="M1 5l3.5 3.5L11 1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                                                        </svg>
+                                                    </span>
+                                                </span>
+                                                <div class="club-chat-task__display-main">
+                                                    <strong :id="'task-title-' + task.taskId" class="task-row-card__title">
+                                                        {{ task.displayTitle }}
+                                                    </strong>
+                                                    <span
+                                                        class="task-row-card__due"
+                                                        :class="{ 'task-row-card__due--overdue': task.isOverdue }"
+                                                    >
+                                                        <span class="task-row-card__due-label">Due</span>
+                                                        <span class="task-row-card__due-value">{{ task.displayDeadline }}</span>
+                                                    </span>
+                                                </div>
+                                                <div class="club-chat-task__display-actions">
+                                                    <span
+                                                        role="button"
+                                                        tabindex="0"
+                                                        class="btn-ghost task-row-card__edit"
+                                                        :class="{ 'task-row-card__action--disabled': taskBusy || !canManageTask(task) }"
+                                                        :aria-disabled="taskBusy || !canManageTask(task)"
+                                                        :aria-label="'Edit ' + task.displayTitle"
+                                                        @click.stop="(taskBusy || !canManageTask(task)) ? null : startEditTask(task)"
+                                                        @keydown.enter.prevent.stop="(taskBusy || !canManageTask(task)) ? null : startEditTask(task)"
+                                                        @keydown.space.prevent.stop="(taskBusy || !canManageTask(task)) ? null : startEditTask(task)"
+                                                    >
+                                                        Edit
+                                                    </span>
+                                                    <span
+                                                        role="button"
+                                                        tabindex="0"
+                                                        class="btn-ghost task-row-card__delete"
+                                                        :class="{ 'task-row-card__action--disabled': taskBusy || !canManageTask(task) }"
+                                                        :aria-disabled="taskBusy || !canManageTask(task)"
+                                                        :aria-label="'Delete ' + task.displayTitle"
+                                                        @click.stop="(taskBusy || !canManageTask(task)) ? null : onDeleteTask(task.taskId)"
+                                                        @keydown.enter.prevent.stop="(taskBusy || !canManageTask(task)) ? null : onDeleteTask(task.taskId)"
+                                                        @keydown.space.prevent.stop="(taskBusy || !canManageTask(task)) ? null : onDeleteTask(task.taskId)"
+                                                    >
+                                                        Delete
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </li>
+                                    </ul>
+                                    <p v-if="!chatTasksVisible.length && !chatTaskCreateOpen && !taskEditingId" class="empty-state muted chat-tasks-pane__empty">No tasks yet. Create one with <strong>New task</strong>.</p>
+                                    <p v-else-if="chatTasksVisible.length && !chatTasksFiltered.length && !chatTaskCreateOpen && !taskEditingId" class="empty-state muted chat-tasks-pane__empty">No {{ chatTaskFilter === 'pending' ? 'pending' : 'completed' }} tasks in this chat.</p>
+                                </div>
+                                </div>
+                            </div>
+                            <Teleport to="body">
+                                <ul
+                                    v-if="taskMenuOpenForTaskId && taskMenuFixedPosition && kebabMenuTask"
+                                    class="club-chat-task__dropdown club-chat-task__dropdown--portal"
+                                    role="menu"
+                                    :style="{
+                                        top: taskMenuFixedPosition.top + 'px',
+                                        left: taskMenuFixedPosition.left + 'px',
+                                    }"
+                                    @pointerdown.stop
+                                    @click.stop
+                                >
+                                    <li role="none">
+                                        <button
+                                            type="button"
+                                            role="menuitem"
+                                            :disabled="taskBusy || !canManageTask(kebabMenuTask)"
+                                            :title="
+                                                canManageTask(kebabMenuTask)
+                                                    ? ''
+                                                    : 'Only chat members can edit tasks'
+                                            "
+                                            @click="startEditTask(kebabMenuTask)"
+                                        >Edit task</button>
+                                    </li>
+                                    <li role="none">
+                                        <button
+                                            type="button"
+                                            role="menuitem"
+                                            class="chat-view__dropdown-item--danger"
+                                            :disabled="taskBusy || !canManageTask(kebabMenuTask)"
+                                            :title="
+                                                canManageTask(kebabMenuTask)
+                                                    ? ''
+                                                    : 'Only chat members can delete tasks'
+                                            "
+                                            @click="onDeleteTask(kebabMenuTask.taskId)"
+                                        >Delete task…</button>
+                                    </li>
+                                </ul>
+                            </Teleport>
+                        </template>
+                    </section>
+                </div>
+            </template>

@@ -1,0 +1,119 @@
+<main v-if="!$graffitiSession.value" class="signed-out">
+  <div class="signed-out__card">
+    <h2>Explore</h2>
+    <p class="muted">Sign in to discover public groups.</p>
+    <button
+      type="button"
+      class="btn-primary btn-lg"
+      @click="$graffiti.login()"
+    >
+      Log in
+    </button>
+  </div>
+</main>
+<main v-else class="route-page panel explore-page">
+  <header class="route-page__head">
+    <h1 class="route-page__title">Explore</h1>
+    <p class="muted">Public groups you haven’t joined yet. Joining opens the chat.</p>
+  </header>
+  <section class="explore-page__body" aria-label="Public groups">
+    <div
+      v-if="isAllChatsLoading && allChatsSorted.length === 0"
+      class="empty-state"
+    >
+      <p>Syncing…</p>
+    </div>
+    <ul
+      v-else-if="discoverUnjoinedChats.length > 0"
+      class="discover-list"
+    >
+      <li
+        v-for="chat in discoverUnjoinedChats"
+        :key="chat.value.channel"
+        class="discover-row"
+      >
+        <span class="discover-row__title">{{ chat.value.title }}</span>
+        <span class="discover-row__actions">
+          <button
+            type="button"
+            class="btn-ghost btn-ghost--small discover-row__info"
+            :aria-label="'Info about ' + chat.value.title"
+            title="Chat info"
+            @click="exploreInfoChannel = chat.value.channel"
+          >
+            i
+          </button>
+          <button
+            type="button"
+            class="btn-primary discover-row__join"
+            :disabled="Boolean(joinBusy[joinChatChannelKey(chat.value.channel)])"
+            @click="onSelectChat(chat.value.channel)"
+          >
+            {{ joinBusy[joinChatChannelKey(chat.value.channel)] ? "…" : "Join" }}
+          </button>
+        </span>
+      </li>
+    </ul>
+    <p v-else-if="allChatsSorted.length > 0" class="empty-state">
+      Every public group is already in your Chats list.
+    </p>
+    <p v-else class="empty-state">No public groups yet.</p>
+  </section>
+
+  <div
+    v-if="exploreInfoChannel && exploreInfoChat"
+    class="explore-modal-overlay"
+    role="presentation"
+    @click.self="exploreInfoChannel = null"
+  >
+    <div
+      class="explore-modal panel"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="explore-modal-title"
+      @click.stop
+    >
+      <button
+        type="button"
+        class="explore-modal__close btn-ghost btn-ghost--small"
+        aria-label="Close"
+        @click="exploreInfoChannel = null"
+      >
+        ×
+      </button>
+      <h2 id="explore-modal-title" class="explore-modal__title">
+        {{ exploreInfoChat.value.title }}
+      </h2>
+      <p
+        class="explore-modal__tag-wrap"
+      >
+        <span
+          :class="groupTagClass(chatGroupType(exploreInfoChat.value.channel))"
+        >{{ groupTypeLabel(chatGroupType(exploreInfoChat.value.channel)) }}</span>
+      </p>
+      <p class="explore-modal__desc">
+        {{ chatDescriptionText(exploreInfoChat.value.channel) || "No description yet." }}
+      </p>
+      <div class="explore-modal__footer">
+        <button
+          type="button"
+          class="btn-ghost"
+          @click="exploreInfoChannel = null"
+        >
+          Close
+        </button>
+        <button
+          type="button"
+          class="btn-primary"
+          :disabled="Boolean(joinBusy[joinChatChannelKey(exploreInfoChat.value.channel)])"
+          @click="
+            onSelectChat(exploreInfoChat.value.channel);
+            exploreInfoChannel = null;
+          "
+        >
+          {{ joinBusy[joinChatChannelKey(exploreInfoChat.value.channel)] ? "Opening…" : "Join chat" }}
+        </button>
+      </div>
+    </div>
+  </div>
+</main>

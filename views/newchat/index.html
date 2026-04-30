@@ -1,0 +1,71 @@
+<main v-if="!$graffitiSession.value" class="signed-out">
+  <div class="signed-out__card">
+    <h2>New Chat</h2>
+    <p class="muted">Sign in to create a group.</p>
+    <button
+      type="button"
+      class="btn-primary btn-lg"
+      @click="$graffiti.login()"
+    >
+      Log in
+    </button>
+  </div>
+</main>
+<main v-else class="route-page panel newchat-page">
+  <header class="route-page__head">
+    <h1 class="route-page__title">New Chat</h1>
+    <p class="muted">
+      Choose a name (max {{ MAX_GROUP_NAME_LEN }} characters), a short description (required),
+      and a group type. You’ll be taken to the new channel when it’s created.
+    </p>
+  </header>
+  <form class="newchat-page__form" @submit.prevent="onCreateChat">
+    <label class="newchat-page__field">
+      <span>Group name</span>
+      <input
+        v-model="newChatTitle"
+        type="text"
+        :maxlength="MAX_GROUP_NAME_LEN"
+        :disabled="createBusy"
+        required
+        placeholder="Short name"
+        aria-label="Group name"
+      />
+      <span class="newchat-page__count">{{ newChatTitle.length }} / {{ MAX_GROUP_NAME_LEN }}</span>
+    </label>
+    <label class="newchat-page__field">
+      <span>Description (required)</span>
+      <textarea
+        v-model="newChatDescription"
+        :disabled="createBusy"
+        rows="3"
+        maxlength="2000"
+        required
+        placeholder="What is this group for?"
+      ></textarea>
+    </label>
+    <label class="newchat-page__field">
+      <span>Group type</span>
+      <select v-model="newGroupType" :disabled="createBusy">
+        <option
+          v-for="opt in GROUP_TAG_OPTIONS"
+          :key="opt.id"
+          :value="opt.id"
+        >{{ opt.label }}</option>
+      </select>
+    </label>
+    <div
+      class="newchat-page__type-preview"
+      :class="groupTagClass(newGroupType)"
+    >{{ groupTypeLabel(newGroupType) }}</div>
+    <div class="new-chat--page__actions">
+      <button
+        type="submit"
+        class="btn-primary"
+        :disabled="createBusy || !newChatTitle.trim() || !newChatDescription.trim() || newChatTitle.trim().length > MAX_GROUP_NAME_LEN"
+      >
+        {{ createBusy ? "Creating…" : "Create group" }}
+      </button>
+    </div>
+  </form>
+</main>

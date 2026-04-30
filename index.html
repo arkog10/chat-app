@@ -2,7 +2,11 @@
 <html lang="en">
     <head>
         <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+        />
+        <meta http-equiv="Cache-Control" content="no-store" />
         <title>ClubChat</title>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link
@@ -14,35 +18,103 @@
             href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
             rel="stylesheet"
         />
-        <link rel="stylesheet" href="style.css" />
+        <link id="app-stylesheet" rel="stylesheet" href="style.css?v=task-row-20260429-3" />
         <script type="importmap">
             {
                 "imports": {
                     "vue": "https://cdn.jsdelivr.net/npm/vue@3.5.32/dist/vue.esm-browser.js",
+                    "vue-router": "https://cdn.jsdelivr.net/npm/vue-router@4.4.5/dist/vue-router.esm-browser.js",
+                    "@vue/devtools-api": "https://cdn.jsdelivr.net/npm/@vue/devtools-api@6.6.3/lib/esm/index.js",
                     "@graffiti-garden/implementation-local": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-local@1.2.0/dist/browser/index.js",
                     "@graffiti-garden/implementation-decentralized": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-decentralized@0.0.9/dist/browser/index.js",
                     "@graffiti-garden/wrapper-vue": "https://cdn.jsdelivr.net/npm/@graffiti-garden/wrapper-vue@1.2.2/dist/browser/plugin.mjs"
                 }
             }
         </script>
-        <script src="index.js" type="module"></script>
+        <script type="module">
+            window.__CLUBCHAT_BUILD_ID = String(Date.now());
+            document.getElementById("app-stylesheet").href =
+                `style.css?v=${window.__CLUBCHAT_BUILD_ID}`;
+            import(`./main.js?v=${window.__CLUBCHAT_BUILD_ID}`);
+        </script>
     </head>
     <body>
+        <nav
+            id="course-submit-links"
+            aria-label="Course submission links"
+            style="
+                font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+                font-size: 0.8125rem;
+                padding: 0.4rem 0.85rem;
+                border-bottom: 1px solid #e2e8f0;
+                background: #f8fafc;
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.5rem 1.15rem;
+                align-items: center;
+                justify-content: flex-end;
+            "
+        >
+            <a
+                href="https://github.com/arkog10/chat-app"
+                style="color: #2563eb; font-weight: 600; text-decoration: none"
+                target="_blank"
+                rel="noopener noreferrer"
+                >Source code (repository)</a
+            >
+            <a
+                href="https://arkog10.github.io/chat-app/"
+                style="color: #2563eb; font-weight: 600; text-decoration: none"
+                target="_blank"
+                rel="noopener noreferrer"
+                >Live site (GitHub Pages)</a
+            >
+        </nav>
         <div id="app">Loading…</div>
 
         <template id="template">
             <nav class="menu-bar" aria-label="Main">
                 <div class="menu-bar__brand">
-                    <template v-if="$graffitiSession.value">
-                        <div class="menu-bar__identity">
-                            <span class="menu-bar__user-label">Signed in as</span>
-                            <span class="menu-bar__user-name">{{
-                                graffitiDisplayName($graffitiSession.value.actor)
-                            }}</span>
-                        </div>
-                    </template>
-                    <span v-else class="menu-bar__app-name">ClubChat</span>
+                    <router-link
+                        to="/"
+                        class="menu-bar__brand-link"
+                        end
+                    >
+                        <template v-if="$graffitiSession.value">
+                            <div class="menu-bar__identity">
+                                <span class="menu-bar__user-label">Signed in as</span>
+                                <span class="menu-bar__user-name">{{
+                                    graffitiDisplayName(
+                                        $graffitiSession.value.actor,
+                                    )
+                                }}</span>
+                            </div>
+                        </template>
+                        <span v-else class="menu-bar__app-name">ClubChat</span>
+                    </router-link>
                 </div>
+                <ul class="menu-bar__nav">
+                    <li>
+                        <router-link to="/" class="menu-bar__nav-link" end>Home</router-link>
+                    </li>
+                    <li>
+                        <router-link
+                            to="/explore"
+                            class="menu-bar__nav-link"
+                        >Explore</router-link>
+                    </li>
+                    <li>
+                        <router-link to="/profile" class="menu-bar__nav-link"
+                            >Profile</router-link
+                        >
+                    </li>
+                    <li>
+                        <router-link
+                            to="/newchat"
+                            class="menu-bar__nav-link"
+                        >New Chat</router-link>
+                    </li>
+                </ul>
                 <div class="menu-bar__actions">
                     <button
                         v-if="$graffitiSession.value"
@@ -53,521 +125,10 @@
                         Log out
                     </button>
                 </div>
-                <ul class="menu-bar__links">
-                    <li>
-                        <a
-                            href="writeup.html"
-                            class="menu-bar__writeup"
-                        >Writeup</a>
-                    </li>
-                </ul>
             </nav>
-
-            <main v-if="!$graffitiSession.value" class="signed-out">
-                <div class="signed-out__card">
-                    <h2>Welcome to ClubChat!</h2>
-                    <button
-                        type="button"
-                        class="btn-primary btn-lg"
-                        @click="$graffiti.login()"
-                    >
-                        Log in
-                    </button>
-                </div>
-            </main>
-
-            <template v-else>
-                <div
-                    v-if="statusMessage"
-                    class="status-banner"
-                    role="status"
-                    aria-live="polite"
-                >
-                    {{ statusMessage }}
-                </div>
-
-                <div
-                    class="layout"
-                    :class="{ 'layout--narrow-showing-main': isNarrow && currentChatId !== null }"
-                >
-                    <!-- SIDEBAR RAIL -->
-                    <aside class="sidebar panel" aria-label="Chats">
-                        <div class="sidebar__head">
-                            <h2>Chats</h2>
-                        </div>
-
-                        <section class="sidebar__section" aria-label="Chat list">
-                            <div
-                                v-if="isAnyListLoading && myChats.length === 0"
-                                class="empty-state"
-                            >
-                                <p>Syncing…</p>
-                            </div>
-                            <ul
-                                v-else-if="myChats.length > 0"
-                                class="chat-list"
-                            >
-                                <li
-                                    v-for="chat in myChats"
-                                    :key="chat.value.channel"
-                                >
-                                    <button
-                                        type="button"
-                                        class="chat-row"
-                                        :class="{
-                                            'chat-row--active':
-                                                currentChatId === chat.value.channel,
-                                        }"
-                                        :disabled="Boolean(joinBusy[chat.value.channel])"
-                                        @click="onSelectChat(chat.value.channel)"
-                                    >
-                                        <span class="chat-row__title">
-                                            {{ chat.value.title }}
-                                        </span>
-                                        <span class="chat-row__meta">
-                                            <span
-                                                v-if="unreadCount(chat.value.channel) > 0"
-                                                class="unread-bubble"
-                                                aria-label="Unread messages"
-                                            >
-                                                {{ unreadCount(chat.value.channel) }}
-                                            </span>
-                                            <span class="chat-row__chevron" aria-hidden="true">
-                                                ›
-                                            </span>
-                                        </span>
-                                    </button>
-                                </li>
-                            </ul>
-                            <p v-else class="empty-state">
-                                No chats yet. Join one from Discover below, or create
-                                a new chat.
-                            </p>
-                        </section>
-
-                        <div class="new-chat">
-                            <button
-                                v-if="!showNewChatForm"
-                                type="button"
-                                class="new-chat__trigger btn-primary"
-                                @click="openNewChatForm"
-                            >
-                                <span class="new-chat__plus" aria-hidden="true">+</span>
-                                New chat
-                            </button>
-                            <form
-                                v-else
-                                class="new-chat__form"
-                                @submit.prevent="onCreateChat"
-                            >
-                                <input
-                                    v-model="newChatTitle"
-                                    ref="newChatInputRef"
-                                    type="text"
-                                    placeholder="Name your chat"
-                                    :disabled="createBusy"
-                                    aria-label="New chat title"
-                                    required
-                                />
-                                <div class="new-chat__actions">
-                                    <button
-                                        type="button"
-                                        class="btn-ghost"
-                                        :disabled="createBusy"
-                                        @click="closeNewChatForm"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        type="submit"
-                                        class="btn-primary"
-                                        :disabled="createBusy || !newChatTitle.trim()"
-                                    >
-                                        {{ createBusy ? "Creating…" : "Create" }}
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-
-                        <section
-                            class="sidebar__bottom"
-                            aria-label="Tasks and discover"
-                        >
-                            <div
-                                class="sidebar-tabs"
-                                role="tablist"
-                                aria-label="Sidebar sections"
-                            >
-                                <button
-                                    type="button"
-                                    role="tab"
-                                    class="sidebar-tabs__tab"
-                                    :class="{
-                                        'sidebar-tabs__tab--active':
-                                            sidebarSectionTab === 'tasks',
-                                    }"
-                                    :aria-selected="sidebarSectionTab === 'tasks'"
-                                    id="tab-tasks"
-                                    aria-controls="panel-tasks"
-                                    @click="sidebarSectionTab = 'tasks'"
-                                >
-                                    Tasks
-                                </button>
-                                <button
-                                    type="button"
-                                    role="tab"
-                                    class="sidebar-tabs__tab"
-                                    :class="{
-                                        'sidebar-tabs__tab--active':
-                                            sidebarSectionTab === 'discover',
-                                    }"
-                                    :aria-selected="sidebarSectionTab === 'discover'"
-                                    id="tab-discover"
-                                    aria-controls="panel-discover"
-                                    @click="sidebarSectionTab = 'discover'"
-                                >
-                                    Discover
-                                </button>
-                            </div>
-
-                            <div
-                                v-show="sidebarSectionTab === 'tasks'"
-                                id="panel-tasks"
-                                role="tabpanel"
-                                aria-labelledby="tab-tasks"
-                                class="sidebar-tab-panel sidebar-tab-panel--tasks"
-                            >
-                                <div class="sidebar-placeholder-box"></div>
-                            </div>
-
-                            <div
-                                v-show="sidebarSectionTab === 'discover'"
-                                id="panel-discover"
-                                role="tabpanel"
-                                aria-labelledby="tab-discover"
-                                class="sidebar-tab-panel"
-                            >
-                                <div
-                                    v-if="isAllChatsLoading && allChatsSorted.length === 0"
-                                    class="empty-state"
-                                >
-                                    <p>Syncing…</p>
-                                </div>
-                                <ul
-                                    v-else-if="discoverUnjoinedChats.length > 0"
-                                    class="discover-list"
-                                >
-                                    <li
-                                        v-for="chat in discoverUnjoinedChats"
-                                        :key="chat.value.channel"
-                                        class="discover-row"
-                                    >
-                                        <span class="discover-row__title">{{
-                                            chat.value.title
-                                        }}</span>
-                                        <button
-                                            type="button"
-                                            class="btn-primary discover-row__join"
-                                            :disabled="Boolean(joinBusy[chat.value.channel])"
-                                            @click="onSelectChat(chat.value.channel)"
-                                        >
-                                            {{
-                                                joinBusy[chat.value.channel]
-                                                    ? "…"
-                                                    : "Join"
-                                            }}
-                                        </button>
-                                    </li>
-                                </ul>
-                                <p
-                                    v-else-if="allChatsSorted.length > 0"
-                                    class="empty-state"
-                                >
-                                    Every group here is in your Chats list above.
-                                </p>
-                                <p v-else class="empty-state">
-                                    No public groups yet.
-                                </p>
-                            </div>
-                        </section>
-                    </aside>
-
-                    <!-- MAIN PANE -->
-                    <section
-                        class="main"
-                        :aria-label="
-                            currentChatId ? chatTitle(currentChatId) : 'No chat selected'
-                        "
-                    >
-                        <div
-                            v-if="currentChatId === null"
-                            class="main-placeholder panel"
-                        >
-                            <h2>Pick a chat on the left</h2>
-                            <p class="muted">
-                                Or create a new one. Your joined chats appear under
-                                Chats; browse everyone’s groups under Discover.
-                            </p>
-                        </div>
-
-                        <template v-else>
-                            <div class="chat-body panel">
-                                <header class="chat-view__header">
-                                    <button
-                                        v-if="isNarrow"
-                                        type="button"
-                                        class="back-button"
-                                        @click="closeChat"
-                                    >
-                                        ← Chats
-                                    </button>
-                                    <h1 class="chat-view__title">
-                                        {{ chatTitle(currentChatId) }}
-                                    </h1>
-                                </header>
-
-                                <div
-                                    ref="messagesPanelRef"
-                                    class="messages-panel"
-                                >
-                                <div
-                                    v-if="areMessagesLoading && sortedMessages.length === 0"
-                                    class="empty-state"
-                                >
-                                    <p>Loading messages…</p>
-                                </div>
-
-                                <ul
-                                    v-else-if="sortedMessages.length > 0"
-                                    class="message-list"
-                                >
-                                    <template
-                                        v-for="item in messageTimeline"
-                                        :key="item.key"
-                                    >
-                                        <li
-                                            v-if="item.kind === 'day'"
-                                            class="message-day"
-                                            role="presentation"
-                                        >
-                                            <time
-                                                class="message-day__chip"
-                                                :datetime="item.dateKey"
-                                            >
-                                                {{
-                                                    formatDayDivider(
-                                                        item.published,
-                                                    )
-                                                }}
-                                            </time>
-                                        </li>
-                                        <li
-                                            v-else
-                                            :class="{
-                                                message: true,
-                                                'message--own':
-                                                    item.message.actor ===
-                                                    $graffitiSession.value.actor,
-                                                'message--peer':
-                                                    item.message.actor !==
-                                                    $graffitiSession.value.actor,
-                                            }"
-                                            :style="{
-                                                '--peer-accent': `hsl(${peerAccentHue(
-                                                    item.message.actor,
-                                                )} 46% 38%)`,
-                                                '--peer-accent-soft': `hsl(${peerAccentHue(
-                                                    item.message.actor,
-                                                )} 42% 94%)`,
-                                            }"
-                                        >
-                                            <div
-                                                class="message__row"
-                                                :class="{
-                                                    'message__row--peer':
-                                                        item.message.actor !==
-                                                        $graffitiSession.value
-                                                            .actor,
-                                                    'message__row--own':
-                                                        item.message.actor ===
-                                                        $graffitiSession.value
-                                                            .actor,
-                                                }"
-                                            >
-                                                <template
-                                                    v-if="
-                                                        item.message.actor !==
-                                                        $graffitiSession.value
-                                                            .actor
-                                                    "
-                                                >
-                                                    <div
-                                                        class="message__pfp message__pfp--peer"
-                                                        :title="
-                                                            graffitiDisplayName(
-                                                                item.message
-                                                                    .actor,
-                                                            )
-                                                        "
-                                                    >
-                                                        <svg
-                                                            class="message__pfp-icon"
-                                                            viewBox="0 0 24 24"
-                                                            aria-hidden="true"
-                                                            focusable="false"
-                                                        >
-                                                            <path
-                                                                fill="currentColor"
-                                                                d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"
-                                                            />
-                                                        </svg>
-                                                    </div>
-                                                    <div
-                                                        class="message__column message__column--peer"
-                                                    >
-                                                        <span
-                                                            class="message__sender-label"
-                                                        >
-                                                            {{
-                                                                graffitiDisplayName(
-                                                                    item.message
-                                                                        .actor,
-                                                                )
-                                                            }}
-                                                        </span>
-                                                        <div class="message__bubble">
-                                                            <div class="message__body">
-                                                                <p
-                                                                    class="message__content"
-                                                                >
-                                                                    {{
-                                                                        item
-                                                                            .message
-                                                                            .value
-                                                                            .content
-                                                                    }}
-                                                                </p>
-                                                                <time
-                                                                    class="message__time"
-                                                                    :datetime="
-                                                                        new Date(
-                                                                            item.message
-                                                                                .value
-                                                                                .published,
-                                                                        ).toISOString()
-                                                                    "
-                                                                >
-                                                                    {{
-                                                                        formatMessageTime(
-                                                                            item.message
-                                                                                .value
-                                                                                .published,
-                                                                        )
-                                                                    }}
-                                                                </time>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </template>
-                                                <template v-else>
-                                                    <div
-                                                        class="message__column message__column--own"
-                                                    >
-                                                        <span
-                                                            class="message__sender-label message__sender-label--own"
-                                                        >
-                                                            {{
-                                                                graffitiDisplayName(
-                                                                    item.message
-                                                                        .actor,
-                                                                )
-                                                            }}
-                                                        </span>
-                                                        <div class="message__bubble">
-                                                            <div class="message__body">
-                                                                <p
-                                                                    class="message__content"
-                                                                >
-                                                                    {{
-                                                                        item
-                                                                            .message
-                                                                            .value
-                                                                            .content
-                                                                    }}
-                                                                </p>
-                                                                <time
-                                                                    class="message__time"
-                                                                    :datetime="
-                                                                        new Date(
-                                                                            item.message
-                                                                                .value
-                                                                                .published,
-                                                                        ).toISOString()
-                                                                    "
-                                                                >
-                                                                    {{
-                                                                        formatMessageTime(
-                                                                            item.message
-                                                                                .value
-                                                                                .published,
-                                                                        )
-                                                                    }}
-                                                                </time>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                    <div
-                                                        class="message__pfp message__pfp--self"
-                                                        title="You"
-                                                    >
-                                                        <svg
-                                                            class="message__pfp-icon"
-                                                            viewBox="0 0 24 24"
-                                                            aria-hidden="true"
-                                                            focusable="false"
-                                                        >
-                                                            <path
-                                                                fill="currentColor"
-                                                                d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"
-                                                            />
-                                                        </svg>
-                                                    </div>
-                                                </template>
-                                            </div>
-                                        </li>
-                                    </template>
-                                </ul>
-
-                                <p v-else class="empty-state">
-                                    No messages yet. Say hello below.
-                                </p>
-                            </div>
-
-                                <form
-                                    class="composer"
-                                    @submit.prevent="onSendMessage"
-                                >
-                                    <input
-                                        v-model="draftMessage"
-                                        ref="composerInputRef"
-                                        type="text"
-                                        placeholder="Write a message…"
-                                        :disabled="sendBusy"
-                                        aria-label="Message"
-                                    />
-                                    <button
-                                        type="submit"
-                                        class="btn-primary"
-                                        :disabled="sendBusy || !draftMessage.trim()"
-                                    >
-                                        {{ sendBusy ? "Sending…" : "Send" }}
-                                    </button>
-                                </form>
-                            </div>
-                        </template>
-                    </section>
-                </div>
-            </template>
+            <div class="app-router">
+                <router-view></router-view>
+            </div>
         </template>
     </body>
 </html>
