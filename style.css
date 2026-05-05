@@ -54,6 +54,11 @@ body {
     -moz-osx-font-smoothing: grayscale;
 }
 
+/* Sit below in-app overlays (e.g. Explore modal z-index 10060). */
+#course-submit-links {
+    position: relative;
+    z-index: 1;
+}
 #app {
     width: min(calc(100% - 2rem), var(--max-width));
     margin: 0 auto;
@@ -586,10 +591,6 @@ a.router-link-active {
     align-self: flex-end;
 }
 
-.newchat-page__type-preview {
-    display: inline-block;
-}
-
 /* --- Profile page --- */
 .profile-page {
     position: relative;
@@ -733,20 +734,28 @@ a.router-link-active {
 .explore-modal-overlay {
     position: fixed;
     inset: 0;
-    z-index: 80;
+    z-index: 10060;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
-    padding: 1rem;
+    /* Course links row + in-app menu bar + buffer (keep title/clearance below chrome) */
+    padding-top: calc(env(safe-area-inset-top, 0px) + 8rem);
+    padding-inline: 1rem;
+    padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
     background: rgba(2, 2, 8, 0.55);
     backdrop-filter: blur(4px);
 }
 
 .explore-modal {
     position: relative;
+    flex-shrink: 0;
     width: min(24rem, 100%);
-    max-height: min(85dvh, 32rem);
+    max-height: min(calc(100dvh - env(safe-area-inset-top, 0px) - 9.25rem), 32rem);
     overflow-y: auto;
+    margin-bottom: 1.5rem;
     padding: 1.35rem 1.25rem 1.15rem;
 }
 
@@ -769,6 +778,41 @@ a.router-link-active {
     color: var(--text-strong);
     letter-spacing: -0.02em;
     padding-right: 0.25rem;
+}
+
+.explore-modal__facts {
+    margin: 0 0 1.15rem;
+    display: grid;
+    grid-template-columns: minmax(5rem, auto) 1fr;
+    gap: 0.45rem 0.85rem;
+    align-items: start;
+    font-size: 0.9rem;
+}
+
+.explore-modal__facts dt {
+    margin: 0;
+    padding-top: 0.12rem;
+    font-size: 0.62rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-ink-muted);
+}
+
+.explore-modal__facts dd {
+    margin: 0;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+    color: var(--text-ink);
+}
+
+.explore-modal__members {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.28rem;
 }
 
 .explore-modal__tag-wrap {
@@ -965,6 +1009,17 @@ select:focus {
     font-weight: 600;
 }
 
+@keyframes status-banner-in {
+    from {
+        opacity: 0;
+        transform: translateY(-0.4rem);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
 .status-banner {
     background: var(--accent-soft);
     color: var(--accent);
@@ -972,6 +1027,7 @@ select:focus {
     padding: 0.55rem 0.85rem;
     font-size: 0.88rem;
     font-weight: 600;
+    animation: status-banner-in 0.28s ease-out;
 }
 
 .muted {
@@ -1018,6 +1074,7 @@ select:focus {
 .main-placeholder.panel .muted,
 .route-page.panel .muted,
 .chat-overlay__panel .muted,
+.explore-modal.panel .explore-modal__facts dd .muted,
 .explore-modal.panel .explore-modal__desc,
 .signed-out__card .muted,
 .layout .sidebar.panel .muted,
@@ -1682,13 +1739,86 @@ select:focus {
     min-width: 0;
 }
 
-.club-chat-task__display-actions {
+.club-chat-task__toolbar {
     display: flex;
     flex: 0 0 auto;
-    flex-wrap: wrap;
-    gap: 0.45rem;
     align-items: center;
-    justify-content: flex-end;
+    gap: 0.12rem;
+    margin-left: auto;
+}
+
+.club-chat-task__more-wrap {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.club-chat-task__expand-hit {
+    min-width: 2rem;
+    min-height: 2rem;
+    padding: 0.15rem 0.35rem;
+    font-size: 0.72rem;
+    line-height: 1;
+    color: var(--text-ink-muted);
+}
+
+.club-chat-task__expand-hit:hover {
+    color: var(--text-ink);
+    background: rgba(99, 102, 241, 0.1);
+}
+
+.club-chat-task__expand-panel {
+    width: 100%;
+    box-sizing: border-box;
+    margin: 0 0 0.65rem;
+    padding: 0.55rem 0.65rem 0.65rem;
+    border: 1px solid rgba(15, 23, 42, 0.1);
+    border-radius: var(--radius-sm);
+    background: rgba(248, 250, 252, 0.92);
+}
+
+.club-chat-task__expand-panel > .club-chat-task__expand-sub:not(:first-child) {
+    margin-top: 0.65rem;
+}
+
+.club-chat-task__expand-desc {
+    margin: 0 0 0.5rem;
+    font-size: 0.8125rem;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    color: var(--text-ink);
+}
+
+.club-chat-task__expand-sub {
+    margin: 0 0 0.28rem;
+    font-size: 0.58rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-ink-muted);
+}
+
+.club-chat-task__expand-empty {
+    margin: 0;
+    font-size: 0.8125rem;
+}
+
+.club-chat-task__assignee-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.club-chat-task__assignee-chips li {
+    padding: 0.22rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.76rem;
+    font-weight: 600;
+    background: rgba(99, 102, 241, 0.12);
+    color: var(--text-ink);
 }
 
 .task-row-card__title {
@@ -1773,14 +1903,59 @@ select:focus {
 }
 
 @media (max-width: 42rem) {
-    .club-chat-task__display-actions {
-        margin-left: 3.05rem;
-        justify-content: flex-start;
-    }
-
     .task-row-card__due {
         flex-basis: calc(100% - 3.05rem);
     }
+}
+
+.club-chat-task-editor__legend {
+    padding: 0 0 0.35rem;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--text-ink-muted);
+}
+
+.club-chat-task-editor__assignees {
+    margin: 0;
+    padding: 0;
+    border: none;
+    min-width: 0;
+}
+
+.club-chat-task-editor__assignee-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    max-height: 10rem;
+    overflow-y: auto;
+}
+
+.club-chat-task-editor__assignee-label {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.45rem;
+    font-weight: 500;
+    font-size: 0.84rem;
+    cursor: pointer;
+}
+
+.club-chat-task-editor__assignee-label input {
+    margin-top: 0.2rem;
+}
+
+.club-chat-task-editor__desc-field textarea {
+    width: 100%;
+    box-sizing: border-box;
+    margin: 0;
+    font: inherit;
+    padding: 0.5rem 0.6rem;
+    border: 1px solid rgba(15, 23, 42, 0.14);
+    border-radius: var(--radius-sm);
+    resize: vertical;
+    min-height: 4rem;
 }
 
 .club-chat-task-list {

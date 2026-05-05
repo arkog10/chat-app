@@ -115,6 +115,8 @@ export function useClubChat() {
   const suppressMainPaneReset = ref(false);
   const chatTaskCreateOpen = ref(false);
   const taskEditingId = ref(null);
+  /** Middle-pane task row showing description / assignees. */
+  const taskExpandedId = ref(/** @type {string | null} */ (null));
   /** Which task’s ⋮ menu is open (synced with teleport position). */
   const taskMenuOpenForTaskId = ref(null);
   /** `{ top, left }` in px for fixed task dropdown under Teleport */
@@ -135,6 +137,9 @@ export function useClubChat() {
     title: "",
     deadlineLocal: "",
     completed: false,
+    description: "",
+    /** Graffiti actor strings — subset of current chat members */
+    assigneeActors: /** @type {string[]} */ ([]),
   });
   const taskBusy = ref(false);
   const taskCompleteBusy = ref(/** @type {Record<string, boolean>} */ ({}));
@@ -290,6 +295,7 @@ export function useClubChat() {
     mainPaneTab.value = "messages";
     chatTaskCreateOpen.value = false;
     taskEditingId.value = null;
+    taskExpandedId.value = null;
     taskMenuOpenForTaskId.value = null;
     taskMenuFixedPosition.value = null;
     kebabMenuTask.value = null;
@@ -454,16 +460,6 @@ export function useClubChat() {
       .sort((a, b) => b.value.published - a.value.published),
   );
 
-  const exploreInfoChat = computed(() => {
-    const id = joinChatChannelKey(exploreInfoChannel.value);
-    if (!id) return null;
-    return (
-      allChatsSorted.value.find(
-        (c) => joinChatChannelKey(c.value.channel) === id,
-      ) ?? null
-    );
-  });
-
   const chatsByChannel = computed(() => {
     const map = mergeLatestChatCreates(allChats.value);
     for (const [ch, bump] of Object.entries(localChatCreateBump.value)) {
@@ -476,6 +472,16 @@ export function useClubChat() {
     }
     return map;
   });
+
+  const exploreInfoChat = computed(() => {
+    const id = joinChatChannelKey(exploreInfoChannel.value);
+    if (!id) return null;
+    return chatsByChannel.value[id] ?? null;
+  });
+
+  const explorePublicChatCount = computed(
+    () => Object.keys(chatsByChannel.value).length,
+  );
 
   watch(
     allChats,
@@ -577,7 +583,9 @@ export function useClubChat() {
   }
 
   const discoverUnjoinedChats = computed(() =>
-    allChatsSorted.value.filter((chat) => !isJoinedToTarget(chat.value.channel)),
+    Object.values(chatsByChannel.value)
+      .filter((chat) => !isJoinedToTarget(chat.value.channel))
+      .sort((a, b) => b.value.published - a.value.published),
   );
 
   // --- Discover: messages across ALL my joined chats (drives unread counts) ---
@@ -730,6 +738,88 @@ export function useClubChat() {
       if (c?.actor) s.add(c.actor);
     }
     return [...s].filter(Boolean).sort();
+  });
+
+  const exploreInfoDetailChannels = computed(() => {
+    const id = joinChatChannelKey(exploreInfoChannel.value);
+    return id ? [id] : [];
+  });
+
+  const { objects: explorePreviewMessages } = useGraffitiDiscover(
+    exploreInfoDetailChannels,
+    {
+      properties: {
+        value: {
+          required: ["activity", "type", "id", "content", "published"],
+          properties: {
+            activity: { const: "Send" },
+            type: { const: "Message" },
+            id: { type: "string" },
+            content: { type: "string" },
+            published: { type: "number" },
+          },
+        },
+      },
+    },
+    PUBLIC_DISCOVER_SESSION,
+    true,
+  );
+
+  const { objects: explorePreviewRoster } = useGraffitiDiscover(
+    exploreInfoDetailChannels,
+    {
+      properties: {
+        value: {
+          required: ["activity", "type", "member", "published"],
+          properties: {
+            activity: { const: "Roster" },
+            type: { type: "string" },
+            member: { type: "string" },
+            published: { type: "number" },
+          },
+        },
+      },
+    },
+    PUBLIC_DISCOVER_SESSION,
+    true,
+  );
+
+  const explorePreviewRosterByMember = computed(() => {
+    const last = new Map();
+    const list = [...explorePreviewRoster.value]
+      .map((o) => o.value)
+      .sort((a, b) => a.published - b.published);
+    for (const v of list) {
+      if (v.activity !== "Roster" || v.type == null) continue;
+      if (v.type === "Here") {
+        last.set(v.member, true);
+      } else if (v.type === "Gone") {
+        last.set(v.member, false);
+      }
+    }
+    return last;
+  });
+
+  /** Members visible from public roster + messages (Explore info modal). */
+  const explorePreviewMemberActors = computed(() => {
+    const chat = exploreInfoChat.value;
+    if (!chat) return [];
+    const ch = joinChatChannelKey(chat.value.channel);
+    if (!ch) return [];
+    const s = new Set();
+    for (const [m, here] of explorePreviewRosterByMember.value) {
+      if (here) s.add(m);
+    }
+    for (const o of explorePreviewMessages.value) {
+      const och = joinChatChannelKey(
+        (o.channels && o.channels[0]) || o.channel,
+      );
+      if (och !== ch) continue;
+      if (o.actor) s.add(o.actor);
+    }
+    return [...s].filter(Boolean).sort((a, b) =>
+      String(a).localeCompare(String(b)),
+    );
   });
 
   const { objects: joinedTaskUpsertObjects } = useGraffitiDiscover(
@@ -937,8 +1027,18 @@ export function useClubChat() {
     ];
   }
 
+  /** Creator is always persisted on assignees; visibility = effective assignees includes viewer. */
+  function taskEffectiveAssignees(task) {
+    const cr = String(task?.creatorActor || "").trim();
+    return normalizeAssigneesInput([
+      ...(cr ? [cr] : []),
+      ...normalizeAssigneesInput(task?.assignees),
+    ]);
+  }
+
   function taskVisibleToSession(task) {
-    return Boolean(session.value?.actor && task?.taskId);
+    if (!session.value?.actor || !task?.taskId) return false;
+    return taskEffectiveAssignees(task).includes(session.value.actor);
   }
 
   const allJoinedTasksList = computed(() => {
@@ -1029,12 +1129,23 @@ export function useClubChat() {
           : String(task.taskId);
       const title = String(task?.title || "").trim() || "Untitled task";
       const deadline = task?.deadline;
+      const detailDescription = String(task?.description ?? "").trim();
+      const creatorActor = String(task?.creatorActor || "").trim();
+      const detailAssigneesDisplay = normalizeAssigneesInput([
+        ...(creatorActor ? [creatorActor] : []),
+        ...normalizeAssigneesInput(task?.assignees),
+      ]);
+      const hasTaskDetails =
+        Boolean(detailDescription) || detailAssigneesDisplay.length > 0;
       return {
         ...task,
         taskId,
         displayTitle: title,
         displayDeadline: formatTaskDeadline(deadline),
         displayKey: `${taskId}:${task?.published || index}`,
+        detailDescription,
+        detailAssigneesDisplay,
+        hasTaskDetails,
         isOverdue:
           !task?.completed &&
           deadline != null &&
@@ -1289,7 +1400,11 @@ export function useClubChat() {
       await postRosterGone(chatId);
       chatActionMenuOpen.value = false;
       flashStatus("You left the group.");
-      if (joinChatChannelKey(currentChatId.value) === joinChatChannelKey(chatId)) {
+      const leftCh = joinChatChannelKey(chatId);
+      if (joinChatChannelKey(exploreInfoChannel.value) === leftCh) {
+        exploreInfoChannel.value = null;
+      }
+      if (joinChatChannelKey(currentChatId.value) === leftCh) {
         void router.push({ name: "home" });
       }
     } catch {
@@ -1326,7 +1441,11 @@ export function useClubChat() {
       void postLeaveInbox(chatId).catch(() => {});
       chatActionMenuOpen.value = false;
       flashStatus("Group deleted.");
-      if (joinChatChannelKey(currentChatId.value) === joinChatChannelKey(chatId)) {
+      const delCh = joinChatChannelKey(chatId);
+      if (joinChatChannelKey(exploreInfoChannel.value) === delCh) {
+        exploreInfoChannel.value = null;
+      }
+      if (joinChatChannelKey(currentChatId.value) === delCh) {
         void router.push({ name: "home" });
       }
     } catch {
@@ -1437,7 +1556,15 @@ export function useClubChat() {
     if (tab === "messages") {
       chatTaskCreateOpen.value = false;
       taskEditingId.value = null;
+      taskExpandedId.value = null;
     }
+  }
+
+  function toggleTaskExpanded(taskId) {
+    const id = taskId == null ? "" : String(taskId);
+    if (!id || id.startsWith("missing-task-")) return;
+    taskExpandedId.value = taskExpandedId.value === id ? null : id;
+    closeTaskKebabMenu();
   }
 
   function toggleTaskKebab(task, evt) {
@@ -1487,7 +1614,8 @@ export function useClubChat() {
     if (
       taskMenuOpenForTaskId.value &&
       !t.closest(".club-chat-task__dropdown--portal") &&
-      !t.closest(".club-chat-task__overflow")
+      !t.closest(".club-chat-task__overflow") &&
+      !t.closest(".club-chat-task__more-wrap")
     ) {
       closeTaskKebabMenu();
     }
@@ -1525,10 +1653,13 @@ export function useClubChat() {
   function openTaskCreateForm() {
     closeTaskKebabMenu();
     taskEditingId.value = null;
+    taskExpandedId.value = null;
     taskDraft.value = {
       title: "",
       deadlineLocal: "",
       completed: false,
+      description: "",
+      assigneeActors: session.value?.actor ? [session.value.actor] : [],
     };
     chatTaskCreateOpen.value = true;
   }
@@ -1542,15 +1673,28 @@ export function useClubChat() {
     }
     closeTaskKebabMenu();
     taskEditingId.value = t.taskId;
+    taskExpandedId.value = null;
     const d = new Date(t.deadline);
     const pad = (n) => String(n).padStart(2, "0");
     const local = Number.isNaN(d.getTime())
       ? ""
       : `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    const cr =
+      String(t.creatorActor || "").trim() ||
+      (session.value ? session.value.actor : "");
+    const memberSet = new Set(currentChatMemberActors.value);
+    const mergedAssignees = normalizeAssigneesInput([
+      ...(cr ? [cr] : []),
+      ...normalizeAssigneesInput(t.assignees),
+    ]);
     taskDraft.value = {
       title: String(t.title || ""),
       deadlineLocal: local,
       completed: Boolean(t.completed),
+      description: String(t.description ?? "").trim(),
+      assigneeActors: mergedAssignees.filter(
+        (a) => memberSet.has(a) || a === cr,
+      ),
     };
     chatTaskCreateOpen.value = false;
   }
@@ -1558,15 +1702,28 @@ export function useClubChat() {
   function cancelTaskForm() {
     chatTaskCreateOpen.value = false;
     taskEditingId.value = null;
+    taskDraft.value = {
+      title: "",
+      deadlineLocal: "",
+      completed: false,
+      description: "",
+      assigneeActors: [],
+    };
   }
 
   async function onSaveTask() {
     if (!session.value || !currentChatId.value || taskBusy.value) return;
     const title = taskDraft.value.title.trim();
-    const description = "";
+    const description = String(taskDraft.value.description || "")
+      .trim()
+      .slice(0, 2000);
     const dl = taskDraft.value.deadlineLocal;
     if (!title || !dl) {
       flashStatus("Task needs a title and due date.");
+      return;
+    }
+    if (!description) {
+      flashStatus("Task needs a description.");
       return;
     }
     const deadlineMs = new Date(dl).getTime();
@@ -1574,9 +1731,18 @@ export function useClubChat() {
       flashStatus("Invalid deadline.");
       return;
     }
-    const assignees = [];
+    const memberSet = new Set(currentChatMemberActors.value);
+    const picked = normalizeAssigneesInput(taskDraft.value.assigneeActors).filter(
+      (a) => memberSet.has(a),
+    );
     const wasEditing = Boolean(taskEditingId.value);
     const taskId = taskEditingId.value || crypto.randomUUID();
+    const existingRow =
+      wasEditing &&
+      chatTasksVisible.value.find((row) => row.taskId === taskId);
+    const creatorActor =
+      String(existingRow?.creatorActor || "").trim() || session.value.actor;
+    const assignees = normalizeAssigneesInput([creatorActor, ...picked]);
     const ch = joinChatChannelKey(currentChatId.value);
     const published = Date.now();
     const value = {
@@ -1612,9 +1778,12 @@ export function useClubChat() {
         title: "",
         deadlineLocal: "",
         completed: false,
+        description: "",
+        assigneeActors: [],
       };
       chatTaskCreateOpen.value = false;
       taskEditingId.value = null;
+      taskExpandedId.value = null;
       flashStatus(wasEditing ? "Task updated." : "Task created.");
     } catch {
       flashStatus("Could not save task.");
@@ -1747,8 +1916,12 @@ export function useClubChat() {
     const key = taskToggleBusyKey(ch, task.taskId);
     if (taskCompleteBusy.value[key]) return;
     taskCompleteBusy.value = { ...taskCompleteBusy.value, [key]: true };
-    const description = "";
-    const assignees = [];
+    const description = String(task.description ?? "").trim().slice(0, 2000);
+    const cr = String(task.creatorActor || "").trim();
+    const assignees = normalizeAssigneesInput([
+      ...(cr ? [cr] : []),
+      ...normalizeAssigneesInput(task.assignees),
+    ]);
     const value = {
       activity: "UpsertTask",
       type: TASK_DOC_TYPE,
@@ -2130,6 +2303,7 @@ export function useClubChat() {
     }
     chatTaskCreateOpen.value = false;
     taskEditingId.value = null;
+    taskExpandedId.value = null;
     taskMenuOpenForTaskId.value = null;
     taskMenuFixedPosition.value = null;
     kebabMenuTask.value = null;
@@ -2246,6 +2420,7 @@ export function useClubChat() {
     sidebarPaneTab,
     chatTaskCreateOpen,
     taskEditingId,
+    taskExpandedId,
     taskMenuOpenForTaskId,
     taskMenuFixedPosition,
     kebabMenuTask,
@@ -2260,6 +2435,8 @@ export function useClubChat() {
     profileDraft,
     exploreInfoChannel,
     exploreInfoChat,
+    explorePublicChatCount,
+    explorePreviewMemberActors,
     chatTasksVisible,
     chatTasksFiltered,
     chatTaskRowsForDisplay,
@@ -2303,6 +2480,7 @@ export function useClubChat() {
     toggleChatInfo,
     toggleTaskKebab,
     closeTaskKebabMenu,
+    toggleTaskExpanded,
     setMainPaneTab,
     startChatMetaEdit,
     cancelChatMetaEdit,

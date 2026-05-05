@@ -18,7 +18,7 @@
   </header>
   <section class="explore-page__body" aria-label="Public groups">
     <div
-      v-if="isAllChatsLoading && allChatsSorted.length === 0"
+      v-if="isAllChatsLoading && explorePublicChatCount === 0"
       class="empty-state"
     >
       <p>Syncing…</p>
@@ -54,12 +54,13 @@
         </span>
       </li>
     </ul>
-    <p v-else-if="allChatsSorted.length > 0" class="empty-state">
+    <p v-else-if="explorePublicChatCount > 0" class="empty-state">
       Every public group is already in your Chats list.
     </p>
     <p v-else class="empty-state">No public groups yet.</p>
   </section>
 
+  <teleport to="body">
   <div
     v-if="exploreInfoChannel && exploreInfoChat"
     class="explore-modal-overlay"
@@ -84,16 +85,28 @@
       <h2 id="explore-modal-title" class="explore-modal__title">
         {{ exploreInfoChat.value.title }}
       </h2>
-      <p
-        class="explore-modal__tag-wrap"
-      >
-        <span
-          :class="groupTagClass(chatGroupType(exploreInfoChat.value.channel))"
-        >{{ groupTypeLabel(chatGroupType(exploreInfoChat.value.channel)) }}</span>
-      </p>
-      <p class="explore-modal__desc">
-        {{ chatDescriptionText(exploreInfoChat.value.channel) || "No description yet." }}
-      </p>
+      <dl class="explore-modal__facts">
+        <dt>Description</dt>
+        <dd>{{ chatDescriptionText(exploreInfoChat.value.channel) || "—" }}</dd>
+        <dt>Group type</dt>
+        <dd>
+          <span :class="groupTagClass(chatGroupType(exploreInfoChat.value.channel))">{{
+            groupTypeLabel(chatGroupType(exploreInfoChat.value.channel))
+          }}</span>
+        </dd>
+        <dt>Members</dt>
+        <dd>
+          <ul
+            v-if="explorePreviewMemberActors.length > 0"
+            class="explore-modal__members"
+          >
+            <li v-for="act in explorePreviewMemberActors" :key="'explore-m-' + act">
+              {{ graffitiDisplayName(act) }}
+            </li>
+          </ul>
+          <span v-else class="muted">None visible from public messages or roster yet.</span>
+        </dd>
+      </dl>
       <div class="explore-modal__footer">
         <button
           type="button"
@@ -116,4 +129,5 @@
       </div>
     </div>
   </div>
+  </teleport>
 </main>

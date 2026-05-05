@@ -687,6 +687,21 @@
                                             Due
                                             <input v-model="taskDraft.deadlineLocal" type="datetime-local" />
                                         </label>
+                                        <fieldset class="club-chat-task-editor__assignees club-chat-task-editor__desc-field">
+                                            <legend class="club-chat-task-editor__legend">Description</legend>
+                                            <textarea v-model="taskDraft.description" rows="3" maxlength="2000" required placeholder="What needs to be done?"></textarea>
+                                        </fieldset>
+                                        <fieldset v-if="currentChatMemberActors.length" class="club-chat-task-editor__assignees">
+                                            <legend class="club-chat-task-editor__legend">Assigned</legend>
+                                            <ul class="club-chat-task-editor__assignee-list">
+                                                <li v-for="act in currentChatMemberActors" :key="'create-assign-' + act">
+                                                    <label class="club-chat-task-editor__assignee-label">
+                                                        <input type="checkbox" :value="act" v-model="taskDraft.assigneeActors" />
+                                                        <span>{{ graffitiDisplayName(act) }}</span>
+                                                    </label>
+                                                </li>
+                                            </ul>
+                                        </fieldset>
                                         <label class="club-chat-task-editor__completed">
                                             <input v-model="taskDraft.completed" type="checkbox" class="club-chat-task-editor__completed-input" />
                                             <span class="club-chat-task-editor__completed-box" aria-hidden="true">
@@ -721,6 +736,21 @@
                                                     Due
                                                     <input v-model="taskDraft.deadlineLocal" type="datetime-local" />
                                                 </label>
+                                                <fieldset class="club-chat-task-editor__assignees club-chat-task-editor__desc-field">
+                                                    <legend class="club-chat-task-editor__legend">Description</legend>
+                                                    <textarea v-model="taskDraft.description" rows="3" maxlength="2000" required placeholder="What needs to be done?"></textarea>
+                                                </fieldset>
+                                                <fieldset v-if="currentChatMemberActors.length" class="club-chat-task-editor__assignees">
+                                                    <legend class="club-chat-task-editor__legend">Assigned</legend>
+                                                    <ul class="club-chat-task-editor__assignee-list">
+                                                        <li v-for="act in currentChatMemberActors" :key="'edit-assign-' + task.taskId + act">
+                                                            <label class="club-chat-task-editor__assignee-label">
+                                                                <input type="checkbox" :value="act" v-model="taskDraft.assigneeActors" />
+                                                                <span>{{ graffitiDisplayName(act) }}</span>
+                                                            </label>
+                                                        </li>
+                                                    </ul>
+                                                </fieldset>
                                                 <label class="club-chat-task-editor__completed">
                                                     <input v-model="taskDraft.completed" type="checkbox" class="club-chat-task-editor__completed-input" />
                                                     <span class="club-chat-task-editor__completed-box" aria-hidden="true">
@@ -772,34 +802,47 @@
                                                         <span class="task-row-card__due-value">{{ task.displayDeadline }}</span>
                                                     </span>
                                                 </div>
-                                                <div class="club-chat-task__display-actions">
-                                                    <span
-                                                        role="button"
-                                                        tabindex="0"
-                                                        class="btn-ghost task-row-card__edit"
-                                                        :class="{ 'task-row-card__action--disabled': taskBusy || !canManageTask(task) }"
-                                                        :aria-disabled="taskBusy || !canManageTask(task)"
-                                                        :aria-label="'Edit ' + task.displayTitle"
-                                                        @click.stop="(taskBusy || !canManageTask(task)) ? null : startEditTask(task)"
-                                                        @keydown.enter.prevent.stop="(taskBusy || !canManageTask(task)) ? null : startEditTask(task)"
-                                                        @keydown.space.prevent.stop="(taskBusy || !canManageTask(task)) ? null : startEditTask(task)"
+                                                <div class="club-chat-task__toolbar">
+                                                    <button
+                                                        type="button"
+                                                        class="btn-ghost club-chat-task__expand-hit"
+                                                        :aria-expanded="taskExpandedId === task.taskId"
+                                                        :aria-controls="'task-expand-' + task.taskId"
+                                                        :aria-label="(taskExpandedId === task.taskId ? 'Collapse' : 'Expand') + ' task details'"
+                                                        @click.stop="toggleTaskExpanded(task.taskId)"
                                                     >
-                                                        Edit
-                                                    </span>
-                                                    <span
-                                                        role="button"
-                                                        tabindex="0"
-                                                        class="btn-ghost task-row-card__delete"
-                                                        :class="{ 'task-row-card__action--disabled': taskBusy || !canManageTask(task) }"
-                                                        :aria-disabled="taskBusy || !canManageTask(task)"
-                                                        :aria-label="'Delete ' + task.displayTitle"
-                                                        @click.stop="(taskBusy || !canManageTask(task)) ? null : onDeleteTask(task.taskId)"
-                                                        @keydown.enter.prevent.stop="(taskBusy || !canManageTask(task)) ? null : onDeleteTask(task.taskId)"
-                                                        @keydown.space.prevent.stop="(taskBusy || !canManageTask(task)) ? null : onDeleteTask(task.taskId)"
-                                                    >
-                                                        Delete
-                                                    </span>
+                                                        <span aria-hidden="true">{{ taskExpandedId === task.taskId ? '▼' : '▶' }}</span>
+                                                    </button>
+                                                    <div class="club-chat-task__more-wrap">
+                                                        <button
+                                                            type="button"
+                                                            class="btn-ghost chat-view__kebab club-chat-task__overflow"
+                                                            aria-label="Task options"
+                                                            :aria-expanded="taskMenuOpenForTaskId === task.taskId"
+                                                            @click.stop="toggleTaskKebab(task, $event)"
+                                                        >⋮</button>
+                                                    </div>
                                                 </div>
+                                            </div>
+                                            <div
+                                                v-if="taskExpandedId === task.taskId && taskEditingId !== task.taskId"
+                                                :id="'task-expand-' + task.taskId"
+                                                class="club-chat-task__expand-panel"
+                                                role="region"
+                                            >
+                                                <template v-if="task.detailDescription">
+                                                    <p class="club-chat-task__expand-sub">Description</p>
+                                                    <p class="club-chat-task__expand-desc">{{ task.detailDescription }}</p>
+                                                </template>
+                                                <template v-if="task.detailAssigneesDisplay.length">
+                                                    <p class="club-chat-task__expand-sub">Assigned</p>
+                                                    <ul class="club-chat-task__assignee-chips">
+                                                        <li v-for="act in task.detailAssigneesDisplay" :key="task.taskId + '-as-' + act">
+                                                            {{ graffitiDisplayName(act) }}
+                                                        </li>
+                                                    </ul>
+                                                </template>
+                                                <p v-if="!task.hasTaskDetails" class="muted club-chat-task__expand-empty">No description or assignees yet.</p>
                                             </div>
                                         </li>
                                     </ul>
@@ -830,7 +873,7 @@
                                                     ? ''
                                                     : 'Only chat members can edit tasks'
                                             "
-                                            @click="startEditTask(kebabMenuTask)"
+                                            @click.stop="startEditTask(kebabMenuTask)"
                                         >Edit task</button>
                                     </li>
                                     <li role="none">
@@ -844,7 +887,7 @@
                                                     ? ''
                                                     : 'Only chat members can delete tasks'
                                             "
-                                            @click="onDeleteTask(kebabMenuTask.taskId)"
+                                            @click.stop="onDeleteTask(kebabMenuTask.taskId)"
                                         >Delete task…</button>
                                     </li>
                                 </ul>

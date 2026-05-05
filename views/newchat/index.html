@@ -15,13 +15,13 @@
   <header class="route-page__head">
     <h1 class="route-page__title">New Chat</h1>
     <p class="muted">
-      Choose a name (max {{ MAX_GROUP_NAME_LEN }} characters), a short description (required),
-      and a group type. You’ll be taken to the new channel when it’s created.
+      Name (max {{ MAX_GROUP_NAME_LEN }} characters), description, and group type — then you’ll open
+      the new channel.
     </p>
   </header>
   <form class="newchat-page__form" @submit.prevent="onCreateChat">
     <label class="newchat-page__field">
-      <span>Group name</span>
+      <span>Name</span>
       <input
         v-model="newChatTitle"
         type="text"
@@ -29,12 +29,12 @@
         :disabled="createBusy"
         required
         placeholder="Short name"
-        aria-label="Group name"
+        aria-label="Name"
       />
       <span class="newchat-page__count">{{ newChatTitle.length }} / {{ MAX_GROUP_NAME_LEN }}</span>
     </label>
     <label class="newchat-page__field">
-      <span>Description (required)</span>
+      <span>Description</span>
       <textarea
         v-model="newChatDescription"
         :disabled="createBusy"
@@ -45,7 +45,7 @@
       ></textarea>
     </label>
     <label class="newchat-page__field">
-      <span>Group type</span>
+      <span>Type</span>
       <select v-model="newGroupType" :disabled="createBusy">
         <option
           v-for="opt in GROUP_TAG_OPTIONS"
@@ -54,10 +54,6 @@
         >{{ opt.label }}</option>
       </select>
     </label>
-    <div
-      class="newchat-page__type-preview"
-      :class="groupTagClass(newGroupType)"
-    >{{ groupTypeLabel(newGroupType) }}</div>
     <div class="new-chat--page__actions">
       <button
         type="submit"
