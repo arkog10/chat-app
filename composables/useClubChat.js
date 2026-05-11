@@ -19,7 +19,7 @@ import {
   normalizeAssigneesInput,
   rememberTaskDetail,
   saveTaskFieldMap,
-} from "./taskFieldStorage.js?v=task-row-20260429-3";
+} from "./taskFieldStorage.js?v=source-msg-20260508-1";
 
 const DISCOVERY_CHANNEL = "arkoghosh-hw10";
 const LAST_SEEN_KEY = "chat-app/last-seen/v1";
@@ -57,6 +57,38 @@ export const GROUP_TAG_OPTIONS = [
   { id: "other", label: "Other" },
 ];
 
+/** Emoji icons for groups (required on create; pick from this set). */
+export const GROUP_ICON_PRESETS = [
+  "🎯",
+  "🌿",
+  "🎨",
+  "⚽",
+  "🎵",
+  "📚",
+  "🧪",
+  "🏠",
+  "🍕",
+  "☕",
+  "🌊",
+  "🚀",
+  "🎭",
+  "🐝",
+  "🦋",
+  "🌟",
+  "🔭",
+  "🧩",
+  "🎮",
+  "🗺️",
+  "💡",
+  "🌸",
+  "⚡",
+  "🎪",
+  "🏔️",
+];
+
+/** Shown when older groups have no `groupIcon` in the wire format. */
+export const DEFAULT_GROUP_ICON = "💬";
+
 /** Graffiti discover(session?: Session | null): use `null` for anonymous discovery.
  * If you pass `undefined`, @graffiti-garden/wrapper-vue substitutes `$graffitiSession`
  * (see vue.graffiti.garden docs). With `null`, only objects that have **no** `allowed`
@@ -82,6 +114,8 @@ export function useClubChat() {
   const newChatTitle = ref("");
   const newChatDescription = ref("");
   const newGroupType = ref("class");
+  /** Must be one of `GROUP_ICON_PRESETS` before creating a group. */
+  const newGroupIcon = ref("");
   const draftMessage = ref("");
   const chatInfoOpen = ref(false);
   const chatActionMenuOpen = ref(false);
@@ -108,8 +142,12 @@ export function useClubChat() {
   /** Explore: which channel’s details are open (null = closed) */
   const exploreInfoChannel = ref(null);
 
-  /** `'messages'` | `'tasks'` — main pane when a chat is open */
+  /** `'messages'` | `'tasks'` — main pane when a chat is open. Retained for the
+   * narrow-screen fallback (CSS hides messages when the drawer is open below 46rem). */
   const mainPaneTab = ref("messages");
+  /** Right-side Tasks drawer in the main pane. When true, messages and tasks render
+   * side-by-side on wide screens; on narrow screens CSS collapses to drawer-only. */
+  const tasksDrawerOpen = ref(false);
   /** `'chats'` | `'tasks'` — left rail on home */
   const sidebarPaneTab = ref("chats");
   const suppressMainPaneReset = ref(false);
@@ -128,6 +166,7 @@ export function useClubChat() {
     title: "",
     description: "",
     groupType: "class",
+    groupIcon: GROUP_ICON_PRESETS[0],
   });
   const chatMetaBusy = ref(false);
   /** Latest Create per channel applied immediately after save until discover catches up. */
@@ -140,6 +179,10 @@ export function useClubChat() {
     description: "",
     /** Graffiti actor strings — subset of current chat members */
     assigneeActors: /** @type {string[]} */ ([]),
+    /** Source message (set when the task is created via the per-message + Task action). */
+    sourceMessageId: "",
+    sourceMessageActor: "",
+    sourceMessagePublished: 0,
   });
   const taskBusy = ref(false);
   const taskCompleteBusy = ref(/** @type {Record<string, boolean>} */ ({}));
@@ -281,6 +324,7 @@ export function useClubChat() {
     newChatTitle.value = "";
     newChatDescription.value = "";
     newGroupType.value = "class";
+    newGroupIcon.value = "";
     draftMessage.value = "";
     createBusy.value = false;
     sendBusy.value = false;
@@ -293,6 +337,7 @@ export function useClubChat() {
     chatActionMenuOpen.value = false;
     exploreInfoChannel.value = null;
     mainPaneTab.value = "messages";
+    tasksDrawerOpen.value = false;
     chatTaskCreateOpen.value = false;
     taskEditingId.value = null;
     taskExpandedId.value = null;
@@ -338,6 +383,7 @@ export function useClubChat() {
               published: { type: "number" },
               description: { type: "string" },
               groupType: { type: "string" },
+              groupIcon: { type: "string" },
             },
           },
         },
@@ -509,7 +555,7 @@ export function useClubChat() {
 
   function chatTitle(chatId) {
     const id = joinChatChannelKey(chatId);
-    return chatsByChannel.value[id]?.value.title ?? "Untitled chat";
+    return chatsByChannel.value[id]?.value.title ?? "Untitled group";
   }
 
   function chatDescriptionText(chatId) {
@@ -527,6 +573,23 @@ export function useClubChat() {
     const id = joinChatChannelKey(chatId);
     const c = chatsByChannel.value[id];
     return c?.actor === session.value.actor;
+  }
+
+  function chatCreatorActor(chatId) {
+    const id = joinChatChannelKey(chatId);
+    return chatsByChannel.value[id]?.actor ?? "";
+  }
+
+  function chatGroupIcon(chatId) {
+    const id = joinChatChannelKey(chatId);
+    const raw = chatsByChannel.value[id]?.value?.groupIcon;
+    const t = raw == null ? "" : String(raw).trim();
+    return t || DEFAULT_GROUP_ICON;
+  }
+
+  function normalizeGroupIconForSave(raw) {
+    const t = String(raw ?? "").trim();
+    return GROUP_ICON_PRESETS.includes(t) ? t : DEFAULT_GROUP_ICON;
   }
 
   // --- Inbox: Join and Leave (private) ---
@@ -1137,6 +1200,9 @@ export function useClubChat() {
       ]);
       const hasTaskDetails =
         Boolean(detailDescription) || detailAssigneesDisplay.length > 0;
+      const sourceMessageId = String(task?.sourceMessageId || "").trim();
+      const sourceMessageActor = String(task?.sourceMessageActor || "").trim();
+      const sourceMessagePublished = Number(task?.sourceMessagePublished) || 0;
       return {
         ...task,
         taskId,
@@ -1146,6 +1212,15 @@ export function useClubChat() {
         detailDescription,
         detailAssigneesDisplay,
         hasTaskDetails,
+        sourceMessageId,
+        sourceMessageActor,
+        sourceMessagePublished,
+        sourceMessageSenderName: sourceMessageActor
+          ? graffitiDisplayName(sourceMessageActor)
+          : "",
+        sourceMessageTimestamp: sourceMessagePublished
+          ? formatMessageQuoteTimestamp(sourceMessagePublished)
+          : "",
         isOverdue:
           !task?.completed &&
           deadline != null &&
@@ -1342,6 +1417,33 @@ export function useClubChat() {
     );
   }
 
+  /** Tombstone + roster + inbox + navigation (no confirm, no busy wrapper). */
+  async function performDeleteGroupNoConfirm(chatId) {
+    if (!session.value) throw new Error("Not signed in.");
+    await graffiti.post(
+      {
+        value: {
+          activity: "Delete",
+          type: "Chat",
+          channel: joinChatChannelKey(chatId),
+          published: Date.now(),
+        },
+        channels: [DISCOVERY_CHANNEL],
+      },
+      session.value,
+    );
+    await postRosterGone(chatId);
+    void postLeaveInbox(chatId).catch(() => {});
+    chatActionMenuOpen.value = false;
+    const delCh = joinChatChannelKey(chatId);
+    if (joinChatChannelKey(exploreInfoChannel.value) === delCh) {
+      exploreInfoChannel.value = null;
+    }
+    if (joinChatChannelKey(currentChatId.value) === delCh) {
+      void router.push({ name: "home" });
+    }
+  }
+
   async function onCreateChat() {
     const title = newChatTitle.value.trim();
     if (!title || createBusy.value) return;
@@ -1355,6 +1457,11 @@ export function useClubChat() {
       return;
     }
     const gt = (newGroupType.value || "class").trim() || "class";
+    const iconPick = String(newGroupIcon.value || "").trim();
+    if (!GROUP_ICON_PRESETS.includes(iconPick)) {
+      flashStatus("Choose a group icon.");
+      return;
+    }
     createBusy.value = true;
     try {
       const channel = crypto.randomUUID();
@@ -1367,6 +1474,7 @@ export function useClubChat() {
         published,
         groupType: gt,
         description: desc.slice(0, 2000),
+        groupIcon: iconPick,
       };
       await graffiti.post(
         {
@@ -1375,11 +1483,20 @@ export function useClubChat() {
         },
         session.value,
       );
+      const chKey = joinChatChannelKey(channel);
+      localChatCreateBump.value = {
+        ...localChatCreateBump.value,
+        [chKey]: {
+          value,
+          actor: session.value.actor,
+        },
+      };
       await postJoin(channel);
       newChatTitle.value = "";
       newChatDescription.value = "";
       newGroupType.value = "class";
-      flashStatus("Chat created.");
+      newGroupIcon.value = "";
+      flashStatus("Group created.");
       void router.push({ name: "chat", params: { chatId: channel } });
     } finally {
       createBusy.value = false;
@@ -1389,6 +1506,27 @@ export function useClubChat() {
   async function onLeaveGroup(chatId) {
     if (!session.value || leaveOrDeleteBusy.value) return;
     if (!hasJoined(chatId)) return;
+
+    if (isChatOwner(chatId)) {
+      if (
+        !window.confirm(
+          "You are this group’s owner. Leaving will permanently delete the group for all members. This cannot be undone.",
+        )
+      ) {
+        return;
+      }
+      leaveOrDeleteBusy.value = true;
+      try {
+        await performDeleteGroupNoConfirm(chatId);
+        flashStatus("Group deleted.");
+      } catch {
+        flashStatus("Could not delete the group. Try again.");
+      } finally {
+        leaveOrDeleteBusy.value = false;
+      }
+      return;
+    }
+
     if (
       !window.confirm("Leave this group? You can re-join from Explore if it is public.")
     ) {
@@ -1416,6 +1554,10 @@ export function useClubChat() {
 
   async function onDeleteGroup(chatId) {
     if (!session.value || leaveOrDeleteBusy.value) return;
+    if (!isChatOwner(chatId)) {
+      flashStatus("Only the group owner can delete this group.");
+      return;
+    }
     if (
       !window.confirm(
         "Permanently delete this group for everyone? This cannot be undone.",
@@ -1425,29 +1567,8 @@ export function useClubChat() {
     }
     leaveOrDeleteBusy.value = true;
     try {
-      await graffiti.post(
-        {
-          value: {
-            activity: "Delete",
-            type: "Chat",
-            channel: joinChatChannelKey(chatId),
-            published: Date.now(),
-          },
-          channels: [DISCOVERY_CHANNEL],
-        },
-        session.value,
-      );
-      await postRosterGone(chatId);
-      void postLeaveInbox(chatId).catch(() => {});
-      chatActionMenuOpen.value = false;
+      await performDeleteGroupNoConfirm(chatId);
       flashStatus("Group deleted.");
-      const delCh = joinChatChannelKey(chatId);
-      if (joinChatChannelKey(exploreInfoChannel.value) === delCh) {
-        exploreInfoChannel.value = null;
-      }
-      if (joinChatChannelKey(currentChatId.value) === delCh) {
-        void router.push({ name: "home" });
-      }
     } catch {
       flashStatus("Could not delete the group. Try again.");
     } finally {
@@ -1456,6 +1577,7 @@ export function useClubChat() {
   }
 
   function startChatMetaEdit(chatId) {
+    if (!isChatOwner(chatId)) return;
     const id = joinChatChannelKey(chatId);
     const v = chatsByChannel.value[id]?.value;
     if (!v) return;
@@ -1463,6 +1585,7 @@ export function useClubChat() {
       title: String(v.title ?? "").slice(0, MAX_GROUP_NAME_LEN),
       description: String(v.description ?? "").trim().slice(0, 2000),
       groupType: String(v.groupType ?? "class").trim() || "class",
+      groupIcon: normalizeGroupIconForSave(v.groupIcon),
     };
     chatMetaEditing.value = true;
   }
@@ -1473,6 +1596,10 @@ export function useClubChat() {
 
   async function saveChatMeta(chatId) {
     if (!session.value || chatMetaBusy.value) return;
+    if (!isChatOwner(chatId)) {
+      flashStatus("Only the group owner can edit group details.");
+      return;
+    }
     const id = joinChatChannelKey(chatId);
     const prev = chatsByChannel.value[id]?.value;
     if (!prev) return;
@@ -1485,6 +1612,7 @@ export function useClubChat() {
       .slice(0, 2000);
     const groupType =
       String(chatMetaDraft.value.groupType || "class").trim() || "class";
+    const groupIcon = normalizeGroupIconForSave(chatMetaDraft.value.groupIcon);
     if (!title) {
       flashStatus("Title is required.");
       return;
@@ -1506,6 +1634,7 @@ export function useClubChat() {
             published,
             groupType,
             description,
+            groupIcon,
           },
           channels: [DISCOVERY_CHANNEL],
         },
@@ -1522,14 +1651,15 @@ export function useClubChat() {
             published,
             groupType,
             description,
+            groupIcon,
           },
           actor: session.value.actor,
         },
       };
-      flashStatus("Chat details updated.");
+      flashStatus("Group details updated.");
       chatMetaEditing.value = false;
     } catch {
-      flashStatus("Could not update chat.");
+      flashStatus("Could not update group.");
     } finally {
       chatMetaBusy.value = false;
     }
@@ -1558,6 +1688,27 @@ export function useClubChat() {
       taskEditingId.value = null;
       taskExpandedId.value = null;
     }
+  }
+
+  function setTasksDrawerOpen(open) {
+    const next = Boolean(open);
+    tasksDrawerOpen.value = next;
+    mainPaneTab.value = next ? "tasks" : "messages";
+    taskMenuOpenForTaskId.value = null;
+    taskMenuFixedPosition.value = null;
+    kebabMenuTask.value = null;
+    if (next) {
+      chatInfoOpen.value = false;
+      chatMetaEditing.value = false;
+    } else {
+      chatTaskCreateOpen.value = false;
+      taskEditingId.value = null;
+      taskExpandedId.value = null;
+    }
+  }
+
+  function toggleTasksDrawer() {
+    setTasksDrawerOpen(!tasksDrawerOpen.value);
   }
 
   function toggleTaskExpanded(taskId) {
@@ -1660,8 +1811,74 @@ export function useClubChat() {
       completed: false,
       description: "",
       assigneeActors: session.value?.actor ? [session.value.actor] : [],
+      sourceMessageId: "",
+      sourceMessageActor: "",
+      sourceMessagePublished: 0,
     };
     chatTaskCreateOpen.value = true;
+  }
+
+  /** "Tue 3:42 PM" style timestamp shown in the quoted block + source chip. */
+  function formatMessageQuoteTimestamp(ms) {
+    const n = Number(ms);
+    if (!Number.isFinite(n) || n <= 0) return "";
+    const d = new Date(n);
+    if (Number.isNaN(d.getTime())) return "";
+    try {
+      return new Intl.DateTimeFormat(undefined, {
+        weekday: "short",
+        hour: "numeric",
+        minute: "2-digit",
+      }).format(d);
+    } catch {
+      return "";
+    }
+  }
+
+  /** Open the drawer and start a task draft prefilled from the given message. */
+  function openTaskFromMessage(message) {
+    if (!session.value || !currentChatId.value) return;
+    const content = String(message?.value?.content || "").trim();
+    const actor = String(message?.actor || "").trim();
+    const messageId = String(message?.value?.id || "").trim();
+    const published = Number(message?.value?.published) || 0;
+
+    setTasksDrawerOpen(true);
+    closeTaskKebabMenu();
+    taskEditingId.value = null;
+    taskExpandedId.value = null;
+    taskDraft.value = {
+      title: "",
+      deadlineLocal: "",
+      completed: false,
+      description: content,
+      assigneeActors: session.value?.actor ? [session.value.actor] : [],
+      sourceMessageId: messageId,
+      sourceMessageActor: actor,
+      sourceMessagePublished: published,
+    };
+    chatTaskCreateOpen.value = true;
+  }
+
+  /** Highlighted message id (transient, ~1.5s). Drives `.message--highlight` in the template. */
+  const messageHighlightId = ref("");
+  let messageHighlightTimer = null;
+
+  function scrollToMessage(messageId) {
+    const id = String(messageId || "").trim();
+    if (!id) return;
+    const el = document.getElementById(`message-${id}`);
+    if (!el) {
+      flashStatus("Original message not available.");
+      return;
+    }
+    el.scrollIntoView({ block: "center", behavior: "smooth" });
+    messageHighlightId.value = id;
+    if (messageHighlightTimer) clearTimeout(messageHighlightTimer);
+    messageHighlightTimer = setTimeout(() => {
+      messageHighlightId.value = "";
+      messageHighlightTimer = null;
+    }, 1500);
   }
 
   function startEditTask(t) {
@@ -1695,6 +1912,9 @@ export function useClubChat() {
       assigneeActors: mergedAssignees.filter(
         (a) => memberSet.has(a) || a === cr,
       ),
+      sourceMessageId: String(t.sourceMessageId || ""),
+      sourceMessageActor: String(t.sourceMessageActor || ""),
+      sourceMessagePublished: Number(t.sourceMessagePublished) || 0,
     };
     chatTaskCreateOpen.value = false;
   }
@@ -1708,6 +1928,9 @@ export function useClubChat() {
       completed: false,
       description: "",
       assigneeActors: [],
+      sourceMessageId: "",
+      sourceMessageActor: "",
+      sourceMessagePublished: 0,
     };
   }
 
@@ -1745,6 +1968,12 @@ export function useClubChat() {
     const assignees = normalizeAssigneesInput([creatorActor, ...picked]);
     const ch = joinChatChannelKey(currentChatId.value);
     const published = Date.now();
+    const sourceMessageId = String(taskDraft.value.sourceMessageId || "").trim();
+    const sourceMessageActor = String(
+      taskDraft.value.sourceMessageActor || "",
+    ).trim();
+    const sourceMessagePublished =
+      Number(taskDraft.value.sourceMessagePublished) || 0;
     const value = {
       activity: "UpsertTask",
       type: TASK_DOC_TYPE,
@@ -1755,6 +1984,13 @@ export function useClubChat() {
       assignees,
       completed: Boolean(taskDraft.value.completed),
       published,
+      ...(sourceMessageId
+        ? {
+            sourceMessageId,
+            sourceMessageActor,
+            sourceMessagePublished,
+          }
+        : {}),
     };
     taskBusy.value = true;
     try {
@@ -1768,11 +2004,28 @@ export function useClubChat() {
       rememberTaskFields(ch, taskId, {
         description,
         assignees,
+        ...(sourceMessageId
+          ? {
+              sourceMessageId,
+              sourceMessageActor,
+              sourceMessagePublished,
+            }
+          : {}),
       });
       rememberLocalTaskUpsert(ch, value, session.value.actor);
       savedTaskHydrationById.value = {
         ...savedTaskHydrationById.value,
-        [taskId]: { assignees: [...assignees], description },
+        [taskId]: {
+          assignees: [...assignees],
+          description,
+          ...(sourceMessageId
+            ? {
+                sourceMessageId,
+                sourceMessageActor,
+                sourceMessagePublished,
+              }
+            : {}),
+        },
       };
       taskDraft.value = {
         title: "",
@@ -1780,6 +2033,9 @@ export function useClubChat() {
         completed: false,
         description: "",
         assigneeActors: [],
+        sourceMessageId: "",
+        sourceMessageActor: "",
+        sourceMessagePublished: 0,
       };
       chatTaskCreateOpen.value = false;
       taskEditingId.value = null;
@@ -1959,6 +2215,7 @@ export function useClubChat() {
   async function goToChatTasks(chatId, taskId) {
     suppressMainPaneReset.value = true;
     chatTaskFilter.value = "all";
+    tasksDrawerOpen.value = true;
     mainPaneTab.value = "tasks";
     sidebarPaneTab.value = "tasks";
     chatInfoOpen.value = false;
@@ -2300,6 +2557,7 @@ export function useClubChat() {
     chatActionMenuOpen.value = false;
     if (!suppressMainPaneReset.value) {
       mainPaneTab.value = "messages";
+      tasksDrawerOpen.value = false;
     }
     chatTaskCreateOpen.value = false;
     taskEditingId.value = null;
@@ -2413,10 +2671,13 @@ export function useClubChat() {
     newChatTitle,
     newChatDescription,
     newGroupType,
+    newGroupIcon,
     draftMessage,
     chatInfoOpen,
     chatActionMenuOpen,
     mainPaneTab,
+    tasksDrawerOpen,
+    messageHighlightId,
     sidebarPaneTab,
     chatTaskCreateOpen,
     taskEditingId,
@@ -2454,6 +2715,8 @@ export function useClubChat() {
     composerInputRef,
     messagesPanelRef,
     GROUP_TAG_OPTIONS,
+    GROUP_ICON_PRESETS,
+    DEFAULT_GROUP_ICON,
     AVATAR_PRESETS,
     // data
     allChatsSorted,
@@ -2482,6 +2745,10 @@ export function useClubChat() {
     closeTaskKebabMenu,
     toggleTaskExpanded,
     setMainPaneTab,
+    setTasksDrawerOpen,
+    toggleTasksDrawer,
+    openTaskFromMessage,
+    scrollToMessage,
     startChatMetaEdit,
     cancelChatMetaEdit,
     saveChatMeta,
@@ -2503,6 +2770,8 @@ export function useClubChat() {
     chatTitle,
     chatDescriptionText,
     chatGroupType,
+    chatGroupIcon,
+    chatCreatorActor,
     groupTagClass,
     groupDotClass,
     groupTypeLabel,
@@ -2510,6 +2779,7 @@ export function useClubChat() {
     MAX_GROUP_NAME_LEN,
     unreadCount,
     formatMessageTime,
+    formatMessageQuoteTimestamp,
     formatDayDivider,
     displayActor,
     graffitiDisplayName,

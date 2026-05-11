@@ -1,6 +1,6 @@
 <main v-if="!$graffitiSession.value" class="signed-out">
   <div class="signed-out__card">
-    <h2>New Chat</h2>
+    <h2>New Group</h2>
     <p class="muted">Sign in to create a group.</p>
     <button
       type="button"
@@ -13,13 +13,31 @@
 </main>
 <main v-else class="route-page panel newchat-page">
   <header class="route-page__head">
-    <h1 class="route-page__title">New Chat</h1>
+    <h1 class="route-page__title">New Group</h1>
     <p class="muted">
-      Name (max {{ MAX_GROUP_NAME_LEN }} characters), description, and group type — then you’ll open
-      the new channel.
+      Name (max {{ MAX_GROUP_NAME_LEN }} characters), icon, description, and group type — then you’ll open
+      the new group.
     </p>
   </header>
   <form class="newchat-page__form" @submit.prevent="onCreateChat">
+    <fieldset class="newchat-page__field newchat-page__icon-field">
+      <legend>Group icon</legend>
+      <p class="newchat-page__icon-hint muted">Choose an icon for this group.</p>
+      <div class="group-icon-picker" role="listbox" aria-label="Group icon">
+        <button
+          v-for="ico in GROUP_ICON_PRESETS"
+          :key="ico"
+          type="button"
+          class="group-icon-picker__btn"
+          :class="{ 'group-icon-picker__btn--selected': newGroupIcon === ico }"
+          :aria-selected="newGroupIcon === ico"
+          :title="'Use ' + ico"
+          @click="newGroupIcon = ico"
+        >
+          {{ ico }}
+        </button>
+      </div>
+    </fieldset>
     <label class="newchat-page__field">
       <span>Name</span>
       <input
@@ -58,7 +76,7 @@
       <button
         type="submit"
         class="btn-primary"
-        :disabled="createBusy || !newChatTitle.trim() || !newChatDescription.trim() || newChatTitle.trim().length > MAX_GROUP_NAME_LEN"
+        :disabled="createBusy || !newGroupIcon || !newChatTitle.trim() || !newChatDescription.trim() || newChatTitle.trim().length > MAX_GROUP_NAME_LEN"
       >
         {{ createBusy ? "Creating…" : "Create group" }}
       </button>

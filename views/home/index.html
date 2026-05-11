@@ -40,7 +40,7 @@
                                     :aria-selected="sidebarPaneTab === 'chats'"
                                     @click="sidebarPaneTab = 'chats'"
                                 >
-                                    Chats
+                                    Groups
                                 </button>
                                 <button
                                     type="button"
@@ -61,14 +61,14 @@
                                         <path d="M12 5v14M5 12h14" />
                                     </svg>
                                 </span>
-                                New Chat
+                                New Group
                             </router-link>
                         </div>
 
                         <section
                             v-show="sidebarPaneTab === 'chats'"
                             class="sidebar__section"
-                            aria-label="Chat list"
+                            aria-label="Group list"
                         >
                             <div
                                 v-if="isAnyListLoading && myChats.length === 0"
@@ -93,6 +93,10 @@
                                         active-class="chat-row--active"
                                     >
                                         <span
+                                            class="chat-row__emoji"
+                                            aria-hidden="true"
+                                        >{{ chatGroupIcon(chat.value.channel) }}</span>
+                                        <span
                                             :class="[groupDotClass(chatGroupType(chat.value.channel)), 'chat-row__dot']"
                                             aria-hidden="true"
                                         ></span>
@@ -115,15 +119,15 @@
                                 </li>
                             </ul>
                             <p v-else class="empty-state">
-                                No chats yet. Open <strong>Explore</strong> in the menu
-                                to find groups, or <strong>New Chat</strong> to start one.
+                                No groups yet. Open <strong>Explore</strong> in the menu
+                                to find more, or <strong>New Group</strong> to start one.
                             </p>
                         </section>
 
                         <section
                             v-show="sidebarPaneTab === 'tasks'"
                             class="sidebar-tasks-rollup sidebar-tasks-rollup--tabbed"
-                            aria-label="Tasks across your chats"
+                            aria-label="Tasks across your groups"
                         >
                             <div
                                 class="task-filter task-filter--sidebar"
@@ -194,7 +198,7 @@
                                             <span
                                                 :class="groupTagClass(chatGroupType(row.chatId))"
                                                 class="sidebar-task-link__group-pill"
-                                            >{{ chatTitle(row.chatId) }}</span>
+                                            ><span class="sidebar-task-link__group-ico" aria-hidden="true">{{ chatGroupIcon(row.chatId) }}</span>{{ chatTitle(row.chatId) }}</span>
                                             <span class="muted"> · {{ formatTaskDeadline(row.deadline) }}</span>
                                         </span>
                                     </button>
@@ -212,16 +216,16 @@
                         class="main"
                         :class="{ 'main--chat-open': currentChatId !== null }"
                         :aria-label="
-                            currentChatId ? chatTitle(currentChatId) : 'No chat selected'
+                            currentChatId ? chatTitle(currentChatId) : 'No group selected'
                         "
                     >
                         <div
                             v-if="currentChatId === null"
                             class="main-placeholder panel"
                         >
-                            <h2>Pick a chat on the left</h2>
+                            <h2>Pick a group on the left</h2>
                             <p class="muted">
-                                Or use <strong>New Chat</strong> or
+                                Or use <strong>New Group</strong> or
                                 <strong>Explore</strong> in the top bar. Your groups
                                 are listed in Home.
                             </p>
@@ -239,32 +243,24 @@
                                             class="chat-view__back btn-ghost btn-ghost--small"
                                             @click="closeChat"
                                         >
-                                            ← Chats
+                                            ← Groups
                                         </button>
                                         <h1 class="chat-view__title">
-                                            {{ chatTitle(currentChatId) }}
+                                            <span class="chat-view__group-icon" aria-hidden="true">{{ chatGroupIcon(currentChatId) }}</span>
+                                            <span class="chat-view__group-title-text">{{ chatTitle(currentChatId) }}</span>
                                         </h1>
                                         <div class="chat-view__header-actions">
-                                            <div class="chat-view__pane-switch" role="tablist" aria-label="Chat view">
-                                                <button
-                                                    type="button"
-                                                    class="chat-view__pane-tab"
-                                                    role="tab"
-                                                    :aria-selected="mainPaneTab === 'messages'"
-                                                    @click="setMainPaneTab('messages')"
-                                                >
-                                                    Messages
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    class="chat-view__pane-tab"
-                                                    role="tab"
-                                                    :aria-selected="mainPaneTab === 'tasks'"
-                                                    @click="setMainPaneTab('tasks')"
-                                                >
-                                                    Tasks
-                                                </button>
-                                            </div>
+                                            <button
+                                                type="button"
+                                                class="chat-view__tasks-toggle"
+                                                :class="{ 'chat-view__tasks-toggle--active': tasksDrawerOpen }"
+                                                :aria-pressed="tasksDrawerOpen"
+                                                :aria-label="tasksDrawerOpen ? 'Hide tasks' : 'Show tasks'"
+                                                @click="toggleTasksDrawer"
+                                            >
+                                                <span class="chat-view__tasks-toggle-label">Tasks</span>
+                                                <span class="chat-view__tasks-toggle-chevron" aria-hidden="true">▸</span>
+                                            </button>
                                             <div class="chat-view__header-tools">
                                                 <div class="chat-view__more-wrap">
                                                     <button
@@ -287,7 +283,7 @@
                                                                 :aria-expanded="chatInfoOpen"
                                                                 @click="toggleChatInfo(); chatActionMenuOpen = false"
                                                             >
-                                                                {{ chatInfoOpen ? "Hide chat info" : "Chat info" }}
+                                                                {{ chatInfoOpen ? "Hide group info" : "Group info" }}
                                                             </button>
                                                         </li>
                                                         <li role="none">
@@ -297,10 +293,14 @@
                                                                 :disabled="leaveOrDeleteBusy"
                                                                 @click="onLeaveGroup(currentChatId); chatActionMenuOpen = false"
                                                             >
-                                                                Leave group…
+                                                                {{
+                                                                    isChatOwner(currentChatId)
+                                                                        ? 'Leave and delete group…'
+                                                                        : 'Leave group…'
+                                                                }}
                                                             </button>
                                                         </li>
-                                                        <li role="none">
+                                                        <li v-if="isChatOwner(currentChatId)" role="none">
                                                             <button
                                                                 type="button"
                                                                 role="menuitem"
@@ -323,12 +323,12 @@
                                     class="chat-overlay chat-overlay--info"
                                     role="dialog"
                                     aria-modal="true"
-                                    aria-label="Chat details"
+                                    aria-label="Group details"
                                     @click.self="chatInfoOpen = false"
                                 >
                                     <div class="chat-overlay__panel chat-overlay__panel--split panel" @click.stop>
                                         <div class="chat-overlay__toolbar">
-                                            <h2 class="chat-overlay__title">Chat details</h2>
+                                            <h2 class="chat-overlay__title">Group details</h2>
                                             <button
                                                 type="button"
                                                 class="btn-ghost btn-ghost--small"
@@ -354,12 +354,28 @@
                                                             <option v-for="opt in GROUP_TAG_OPTIONS" :key="opt.id" :value="opt.id">{{ opt.label }}</option>
                                                         </select>
                                                     </label>
+                                                    <fieldset class="chat-overlay__field group-icon-fieldset">
+                                                        <legend>Group icon</legend>
+                                                        <div class="group-icon-picker" role="listbox" aria-label="Group icon">
+                                                            <button
+                                                                v-for="ico in GROUP_ICON_PRESETS"
+                                                                :key="'meta-' + ico"
+                                                                type="button"
+                                                                class="group-icon-picker__btn"
+                                                                :class="{ 'group-icon-picker__btn--selected': chatMetaDraft.groupIcon === ico }"
+                                                                :aria-selected="chatMetaDraft.groupIcon === ico"
+                                                                @click="chatMetaDraft.groupIcon = ico"
+                                                            >{{ ico }}</button>
+                                                        </div>
+                                                    </fieldset>
                                                     <div class="chat-overlay__edit-actions">
                                                         <button type="button" class="btn-ghost" @click="cancelChatMetaEdit" :disabled="chatMetaBusy">Cancel</button>
                                                         <button type="button" class="btn-primary" @click="saveChatMeta(currentChatId)" :disabled="chatMetaBusy">{{ chatMetaBusy ? "Saving…" : "Save" }}</button>
                                                     </div>
                                                 </template>
                                                 <template v-else>
+                                                    <h3 class="chat-overlay__section-title">Icon</h3>
+                                                    <p class="chat-overlay__icon-display" aria-hidden="true">{{ chatGroupIcon(currentChatId) }}</p>
                                                     <h3 class="chat-overlay__section-title">Group type</h3>
                                                     <p class="chat-overlay__tag-wrap">
                                                         <span :class="groupTagClass(chatGroupType(currentChatId))">{{ groupTypeLabel(chatGroupType(currentChatId)) }}</span>
@@ -379,16 +395,26 @@
                                             <div class="chat-overlay__col chat-overlay__col--members">
                                                 <h3 class="chat-overlay__section-title">Members</h3>
                                                 <ul class="chat-member-list chat-member-list--overlay">
-                                                    <li v-for="act in currentChatMemberActors" :key="act">{{ graffitiDisplayName(act) }}</li>
+                                                    <li v-for="act in currentChatMemberActors" :key="act" class="chat-member-list__row">
+                                                        <span>{{ graffitiDisplayName(act) }}</span>
+                                                        <span
+                                                            v-if="act === chatCreatorActor(currentChatId)"
+                                                            class="member-creator-star"
+                                                            title="Group creator"
+                                                            aria-label="Group creator"
+                                                        >★</span>
+                                                    </li>
                                                 </ul>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
 
-                                <div class="chat-body__conversation">
                                 <div
-                                    v-show="mainPaneTab === 'messages'"
+                                    class="chat-body__conversation"
+                                    :class="{ 'chat-body__conversation--drawer-open': tasksDrawerOpen }"
+                                >
+                                <div
                                     class="chat-main-pane chat-main-pane--messages"
                                 >
                                 <div
@@ -428,6 +454,7 @@
                                         </li>
                                         <li
                                             v-else
+                                            :id="'message-' + item.message.value.id"
                                             :class="{
                                                 message: true,
                                                 'message--own':
@@ -436,6 +463,8 @@
                                                 'message--peer':
                                                     item.message.actor !==
                                                     $graffitiSession.value.actor,
+                                                'message--highlight':
+                                                    messageHighlightId === item.message.value.id,
                                             }"
                                             :style="{
                                                 '--peer-accent': `hsl(${peerAccentHue(
@@ -534,8 +563,32 @@
                                                             </div>
                                                         </div>
                                                     </div>
+                                                    <button
+                                                        type="button"
+                                                        class="message__task-action"
+                                                        aria-label="Create task from this message"
+                                                        title="Create task from this message"
+                                                        @click="openTaskFromMessage(item.message)"
+                                                    >
+                                                        <svg class="message__task-action-icon" viewBox="0 0 16 16" aria-hidden="true">
+                                                            <path d="M4.5 8h7M8 4.5v7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                                                        </svg>
+                                                        <span class="message__task-action-label">Task</span>
+                                                    </button>
                                                 </template>
                                                 <template v-else>
+                                                    <button
+                                                        type="button"
+                                                        class="message__task-action message__task-action--own"
+                                                        aria-label="Create task from this message"
+                                                        title="Create task from this message"
+                                                        @click="openTaskFromMessage(item.message)"
+                                                    >
+                                                        <svg class="message__task-action-icon" viewBox="0 0 16 16" aria-hidden="true">
+                                                            <path d="M4.5 8h7M8 4.5v7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                                                        </svg>
+                                                        <span class="message__task-action-label">Task</span>
+                                                    </button>
                                                     <div
                                                         class="message__column message__column--own"
                                                     >
@@ -633,8 +686,9 @@
                                 </div>
 
                                 <div
-                                    v-show="mainPaneTab === 'tasks'"
+                                    v-show="tasksDrawerOpen"
                                     class="chat-main-pane chat-main-pane--tasks"
+                                    aria-label="Tasks for this group"
                                 >
                                     <div class="chat-tasks-pane__header">
                                         <div class="chat-tasks-pane__toolbar">
@@ -644,7 +698,7 @@
                                         <div
                                             class="task-filter task-filter--chat"
                                             role="tablist"
-                                            aria-label="Filter tasks in this chat"
+                                            aria-label="Filter tasks in this group"
                                         >
                                             <button
                                                 type="button"
@@ -678,7 +732,23 @@
                                             </button>
                                         </div>
                                     </div>
-                                    <div v-if="chatTaskCreateOpen && !taskEditingId" class="club-chat-task-editor">
+                                    <div
+                                        v-if="chatTaskCreateOpen && !taskEditingId"
+                                        class="club-chat-task-editor"
+                                        :class="{ 'club-chat-task-editor--from-message': taskDraft.sourceMessageId }"
+                                    >
+                                        <div
+                                            v-if="taskDraft.sourceMessageId"
+                                            class="club-chat-task-editor__source-hint"
+                                            role="note"
+                                        >
+                                            <svg class="club-chat-task__source-chip-icon" viewBox="0 0 16 16" aria-hidden="true">
+                                                <path d="M2.5 4.2a1.7 1.7 0 0 1 1.7-1.7h7.6a1.7 1.7 0 0 1 1.7 1.7v4.6a1.7 1.7 0 0 1-1.7 1.7H7l-2.6 2.4v-2.4h-.2a1.7 1.7 0 0 1-1.7-1.7V4.2z" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linejoin="round"/>
+                                            </svg>
+                                            <span class="club-chat-task-editor__source-hint-text">
+                                                Creating from {{ graffitiDisplayName(taskDraft.sourceMessageActor) || "a message" }}<template v-if="formatMessageQuoteTimestamp(taskDraft.sourceMessagePublished)"> · {{ formatMessageQuoteTimestamp(taskDraft.sourceMessagePublished) }}</template>
+                                            </span>
+                                        </div>
                                         <label class="chat-overlay__field">
                                             Task name
                                             <input v-model="taskDraft.title" type="text" maxlength="120" placeholder="Short title" />
@@ -697,7 +767,15 @@
                                                 <li v-for="act in currentChatMemberActors" :key="'create-assign-' + act">
                                                     <label class="club-chat-task-editor__assignee-label">
                                                         <input type="checkbox" :value="act" v-model="taskDraft.assigneeActors" />
-                                                        <span>{{ graffitiDisplayName(act) }}</span>
+                                                        <span>
+                                                            {{ graffitiDisplayName(act) }}
+                                                            <span
+                                                                v-if="act === chatCreatorActor(currentChatId)"
+                                                                class="member-creator-star member-creator-star--inline"
+                                                                title="Group creator"
+                                                                aria-label="Group creator"
+                                                            >★</span>
+                                                        </span>
                                                     </label>
                                                 </li>
                                             </ul>
@@ -746,7 +824,15 @@
                                                         <li v-for="act in currentChatMemberActors" :key="'edit-assign-' + task.taskId + act">
                                                             <label class="club-chat-task-editor__assignee-label">
                                                                 <input type="checkbox" :value="act" v-model="taskDraft.assigneeActors" />
-                                                                <span>{{ graffitiDisplayName(act) }}</span>
+                                                                <span>
+                                                                    {{ graffitiDisplayName(act) }}
+                                                                    <span
+                                                                        v-if="act === chatCreatorActor(currentChatId)"
+                                                                        class="member-creator-star member-creator-star--inline"
+                                                                        title="Group creator"
+                                                                        aria-label="Group creator"
+                                                                    >★</span>
+                                                                </span>
                                                             </label>
                                                         </li>
                                                     </ul>
@@ -794,6 +880,20 @@
                                                     <strong :id="'task-title-' + task.taskId" class="task-row-card__title">
                                                         {{ task.displayTitle }}
                                                     </strong>
+                                                    <button
+                                                        v-if="task.sourceMessageId"
+                                                        type="button"
+                                                        class="club-chat-task__source-chip"
+                                                        :aria-label="'Jump to source message' + (task.sourceMessageSenderName ? ' from ' + task.sourceMessageSenderName : '')"
+                                                        @click.stop="scrollToMessage(task.sourceMessageId)"
+                                                    >
+                                                        <svg class="club-chat-task__source-chip-icon" viewBox="0 0 16 16" aria-hidden="true">
+                                                            <path d="M2.5 4.2a1.7 1.7 0 0 1 1.7-1.7h7.6a1.7 1.7 0 0 1 1.7 1.7v4.6a1.7 1.7 0 0 1-1.7 1.7H7l-2.6 2.4v-2.4h-.2a1.7 1.7 0 0 1-1.7-1.7V4.2z" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linejoin="round"/>
+                                                        </svg>
+                                                        <span class="club-chat-task__source-chip-text">
+                                                            From {{ task.sourceMessageSenderName || "a message" }}<template v-if="task.sourceMessageTimestamp"> · {{ task.sourceMessageTimestamp }}</template>
+                                                        </span>
+                                                    </button>
                                                     <span
                                                         class="task-row-card__due"
                                                         :class="{ 'task-row-card__due--overdue': task.isOverdue }"
@@ -805,13 +905,18 @@
                                                 <div class="club-chat-task__toolbar">
                                                     <button
                                                         type="button"
-                                                        class="btn-ghost club-chat-task__expand-hit"
+                                                        class="club-chat-task__expand-hit"
                                                         :aria-expanded="taskExpandedId === task.taskId"
                                                         :aria-controls="'task-expand-' + task.taskId"
-                                                        :aria-label="(taskExpandedId === task.taskId ? 'Collapse' : 'Expand') + ' task details'"
+                                                        :aria-label="(taskExpandedId === task.taskId ? 'Hide' : 'Show') + ' description and assignees for this task'"
                                                         @click.stop="toggleTaskExpanded(task.taskId)"
                                                     >
-                                                        <span aria-hidden="true">{{ taskExpandedId === task.taskId ? '▼' : '▶' }}</span>
+                                                        <span class="club-chat-task__expand-label">Details</span>
+                                                        <span
+                                                            class="club-chat-task__expand-chev"
+                                                            :class="{ 'club-chat-task__expand-chev--open': taskExpandedId === task.taskId }"
+                                                            aria-hidden="true"
+                                                        >▾</span>
                                                     </button>
                                                     <div class="club-chat-task__more-wrap">
                                                         <button
@@ -839,6 +944,12 @@
                                                     <ul class="club-chat-task__assignee-chips">
                                                         <li v-for="act in task.detailAssigneesDisplay" :key="task.taskId + '-as-' + act">
                                                             {{ graffitiDisplayName(act) }}
+                                                            <span
+                                                                v-if="act === chatCreatorActor(currentChatId)"
+                                                                class="member-creator-star member-creator-star--inline"
+                                                                title="Group creator"
+                                                                aria-label="Group creator"
+                                                            >★</span>
                                                         </li>
                                                     </ul>
                                                 </template>
@@ -847,7 +958,7 @@
                                         </li>
                                     </ul>
                                     <p v-if="!chatTasksVisible.length && !chatTaskCreateOpen && !taskEditingId" class="empty-state muted chat-tasks-pane__empty">No tasks yet. Create one with <strong>New task</strong>.</p>
-                                    <p v-else-if="chatTasksVisible.length && !chatTasksFiltered.length && !chatTaskCreateOpen && !taskEditingId" class="empty-state muted chat-tasks-pane__empty">No {{ chatTaskFilter === 'pending' ? 'pending' : 'completed' }} tasks in this chat.</p>
+                                    <p v-else-if="chatTasksVisible.length && !chatTasksFiltered.length && !chatTaskCreateOpen && !taskEditingId" class="empty-state muted chat-tasks-pane__empty">No {{ chatTaskFilter === 'pending' ? 'pending' : 'completed' }} tasks in this group.</p>
                                 </div>
                                 </div>
                             </div>
@@ -871,7 +982,7 @@
                                             :title="
                                                 canManageTask(kebabMenuTask)
                                                     ? ''
-                                                    : 'Only chat members can edit tasks'
+                                                    : 'Only group members can edit tasks'
                                             "
                                             @click.stop="startEditTask(kebabMenuTask)"
                                         >Edit task</button>
@@ -885,7 +996,7 @@
                                             :title="
                                                 canManageTask(kebabMenuTask)
                                                     ? ''
-                                                    : 'Only chat members can delete tasks'
+                                                    : 'Only group members can delete tasks'
                                             "
                                             @click.stop="onDeleteTask(kebabMenuTask.taskId)"
                                         >Delete task…</button>

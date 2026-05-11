@@ -56,7 +56,7 @@ export function normalizeAssigneesInput(raw) {
   return [];
 }
 
-/** @typedef {{ description?: string, assignees?: string[] }} TaskFieldSlot */
+/** @typedef {{ description?: string, assignees?: string[], sourceMessageId?: string, sourceMessageActor?: string, sourceMessagePublished?: number }} TaskFieldSlot */
 /** @typedef {Record<string, Record<string, TaskFieldSlot>>} TaskFieldMap */
 
 /** @param {Record<string, unknown>} raw */
@@ -172,13 +172,45 @@ export function mergeTaskFieldsFromStorage(task, channelKey, map) {
   /** Discover first order, then localStorage when discover omitted / wrong shape */
   const assignees = mergeAssigneeLists(netAsg, cacheRaw);
 
-  const merged = { ...task, description, assignees };
+  /** Source-message fields: prefer wire data, fall back to local cache. */
+  const netSrcId =
+    typeof task.sourceMessageId === "string" ? task.sourceMessageId.trim() : "";
+  const cacheSrcId =
+    slot && typeof slot.sourceMessageId === "string"
+      ? slot.sourceMessageId.trim()
+      : "";
+  const sourceMessageId = netSrcId || cacheSrcId;
+  const netSrcActor =
+    typeof task.sourceMessageActor === "string"
+      ? task.sourceMessageActor.trim()
+      : "";
+  const cacheSrcActor =
+    slot && typeof slot.sourceMessageActor === "string"
+      ? slot.sourceMessageActor.trim()
+      : "";
+  const sourceMessageActor = netSrcActor || cacheSrcActor;
+  const netSrcPub = Number(task.sourceMessagePublished) || 0;
+  const cacheSrcPub = slot ? Number(slot.sourceMessagePublished) || 0 : 0;
+  const sourceMessagePublished = netSrcPub || cacheSrcPub;
+
+  const merged = {
+    ...task,
+    description,
+    assignees,
+    sourceMessageId,
+    sourceMessageActor,
+    sourceMessagePublished,
+  };
   const sameDesc = (task.description || "") === merged.description;
   const sameAsg =
     JSON.stringify(normalizeAssigneesInput(task.assignees)) ===
     JSON.stringify(merged.assignees);
+  const sameSrc =
+    (task.sourceMessageId || "") === merged.sourceMessageId &&
+    (task.sourceMessageActor || "") === merged.sourceMessageActor &&
+    (Number(task.sourceMessagePublished) || 0) === merged.sourceMessagePublished;
   /* Don't return stale `task` when assignees are still object-shaped from discover — breaks `v-for`. */
-  if (sameDesc && sameAsg && Array.isArray(task.assignees)) return task;
+  if (sameDesc && sameAsg && sameSrc && Array.isArray(task.assignees)) return task;
   return merged;
 }
 
@@ -204,6 +236,18 @@ export function rememberTaskDetail(root, channelKey, taskId, patch) {
   }
   if ("assignees" in patch && patch.assignees != null) {
     nextSlot.assignees = normalizeAssigneesInput(patch.assignees);
+  }
+  if ("sourceMessageId" in patch) {
+    nextSlot.sourceMessageId =
+      patch.sourceMessageId == null ? "" : String(patch.sourceMessageId);
+  }
+  if ("sourceMessageActor" in patch) {
+    nextSlot.sourceMessageActor =
+      patch.sourceMessageActor == null ? "" : String(patch.sourceMessageActor);
+  }
+  if ("sourceMessagePublished" in patch) {
+    const n = Number(patch.sourceMessagePublished);
+    nextSlot.sourceMessagePublished = Number.isFinite(n) ? n : 0;
   }
   return {
     ...root,

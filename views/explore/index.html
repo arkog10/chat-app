@@ -14,7 +14,7 @@
 <main v-else class="route-page panel explore-page">
   <header class="route-page__head">
     <h1 class="route-page__title">Explore</h1>
-    <p class="muted">Public groups you haven’t joined yet. Joining opens the chat.</p>
+    <p class="muted">Public groups you haven’t joined yet. Joining opens the group.</p>
   </header>
   <section class="explore-page__body" aria-label="Public groups">
     <div
@@ -32,16 +32,19 @@
         :key="chat.value.channel"
         class="discover-row"
       >
-        <span class="discover-row__title">{{ chat.value.title }}</span>
+        <span class="discover-row__lead">
+          <span class="discover-row__emoji" aria-hidden="true">{{ chatGroupIcon(chat.value.channel) }}</span>
+          <span class="discover-row__title">{{ chat.value.title }}</span>
+        </span>
         <span class="discover-row__actions">
           <button
             type="button"
-            class="btn-ghost btn-ghost--small discover-row__info"
+            class="btn-primary discover-row__join"
             :aria-label="'Info about ' + chat.value.title"
-            title="Chat info"
+            title="Group details"
             @click="exploreInfoChannel = chat.value.channel"
           >
-            i
+            Info
           </button>
           <button
             type="button"
@@ -55,7 +58,7 @@
       </li>
     </ul>
     <p v-else-if="explorePublicChatCount > 0" class="empty-state">
-      Every public group is already in your Chats list.
+      Every public group is already in your Groups list.
     </p>
     <p v-else class="empty-state">No public groups yet.</p>
   </section>
@@ -83,6 +86,7 @@
         ×
       </button>
       <h2 id="explore-modal-title" class="explore-modal__title">
+        <span class="explore-modal__emoji" aria-hidden="true">{{ chatGroupIcon(exploreInfoChat.value.channel) }}</span>
         {{ exploreInfoChat.value.title }}
       </h2>
       <dl class="explore-modal__facts">
@@ -100,8 +104,14 @@
             v-if="explorePreviewMemberActors.length > 0"
             class="explore-modal__members"
           >
-            <li v-for="act in explorePreviewMemberActors" :key="'explore-m-' + act">
-              {{ graffitiDisplayName(act) }}
+            <li v-for="act in explorePreviewMemberActors" :key="'explore-m-' + act" class="chat-member-list__row">
+              <span>{{ graffitiDisplayName(act) }}</span>
+              <span
+                v-if="exploreInfoChat && act === exploreInfoChat.actor"
+                class="member-creator-star"
+                title="Group creator"
+                aria-label="Group creator"
+              >★</span>
             </li>
           </ul>
           <span v-else class="muted">None visible from public messages or roster yet.</span>
@@ -124,7 +134,7 @@
             exploreInfoChannel = null;
           "
         >
-          {{ joinBusy[joinChatChannelKey(exploreInfoChat.value.channel)] ? "Opening…" : "Join chat" }}
+          {{ joinBusy[joinChatChannelKey(exploreInfoChat.value.channel)] ? "Opening…" : "Join group" }}
         </button>
       </div>
     </div>
